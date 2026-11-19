@@ -33,6 +33,7 @@
       <li>Les téléphones et contacts restent visibles uniquement par qui les a saisis et par le propriétaire.</li>
       <li>Carte satellite, position GPS du téléphone, et consultation même sans réseau.</li>
     </ul>
+    <a class="gate-apk" id="gateApk" href="download/valtera.apk">Télécharger l’application Android</a>
   </div>
 </section>
 <header class="bar gut">
@@ -55,6 +56,7 @@
         <button type="button" id="kmlExport">Exporter pour Google My Maps (KML)</button>
         <hr>
         <button type="button" id="mSettings">Réglages des calculs</button>
+        <button type="button" id="mApk">Application Android (APK)</button>
         <hr>
         <button type="button" id="mBackup">Sauvegarde complète (JSON)</button>
         <button type="button" id="mRestore">Importer une sauvegarde (JSON)</button>
@@ -68,8 +70,8 @@
 </header>
 <nav class="mods gut" id="mods" aria-label="Modules"><div class="in">
   <button type="button" data-m="temoins" class="on">Témoins</button>
+  <button type="button" data-m="visites" id="modVisites">Fiches de visite</button>
   <button type="button" data-m="admin" id="modAdmin" hidden>Administration</button>
-  <button type="button" data-m="visites" class="soon">Fiches de visite <span>bientôt</span></button>
   <button type="button" data-m="dossiers" class="soon">Dossiers <span>bientôt</span></button>
   <button type="button" data-m="ia" class="soon">Assistant IA <span>bientôt</span></button>
 </div></nav>
@@ -136,7 +138,7 @@
         <h3>Inviter une personne</h3>
         <label>Adresse Gmail<input id="i_email" type="email" placeholder="prenom.nom@gmail.com" required></label>
         <label>Rôle<select id="i_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
-        <div class="chks"><label class="chk"><input type="checkbox" checked disabled> Module Témoins</label><label class="chk"><input type="checkbox" id="i_m_export"> Peut exporter (Excel, My Maps, sauvegarde)</label></div>
+        <div class="chks"><label class="chk"><input type="checkbox" checked disabled> Module Témoins</label><label class="chk"><input type="checkbox" id="i_m_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="i_m_export"> Peut exporter (Excel, My Maps, sauvegarde)</label></div>
         <label><span>Accès jusqu’au <span class="u">(facultatif)</span></span><input id="i_expires" type="date"></label>
         <div><button class="btn pri" type="submit" id="invBtn">Inviter</button></div>
         <p class="note" id="invNote" role="status"></p>
@@ -151,6 +153,7 @@
             <tr><td>Modifier</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
             <tr><td>Supprimer</td><td>Oui</td><td>Non</td><td>Non</td></tr>
             <tr><td>Voir les téléphones et contacts</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
+            <tr><td>Fiches de visite (si le module est donné)</td><td>Toutes</td><td>Les siennes</td><td>Non</td></tr>
             <tr><td>Administration</td><td>Oui</td><td>Non</td><td>Non</td></tr>
           </tbody></table></div>
         <p class="note">Dans les observations partagées, les numéros de téléphone et le nom du contact sont remplacés par « [tél. privé] » et « [contact privé] ».</p>
@@ -160,6 +163,14 @@
       <h3>Comptes <span class="meta" id="admCount"></span></h3>
       <div class="tblwrap flat"><table class="t" id="admTbl"></table></div>
     </div>
+  </div>
+</section>
+
+<section class="gut vis" id="visitesView" hidden>
+  <div class="in">
+    <div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Remplies sur place, reliées aux témoins par leur référence T-…, imprimables en PDF.</p></div><button class="btn pri" type="button" id="visAdd">+ Nouvelle fiche</button></div>
+    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Réf. V-0001, dossier, ville, quartier, contact…" aria-label="Rechercher une fiche"><span class="meta" id="visCount"></span></div>
+    <div class="vlist" id="visList"></div>
   </div>
 </section>
 
@@ -366,11 +377,20 @@
       <label class="s2">Rôle<select id="u_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
       <label>Accès jusqu’au<input id="u_expires" type="date"></label>
     </div>
-    <div class="chks"><label class="chk"><input type="checkbox" id="u_export"> Peut exporter (Excel, My Maps, sauvegarde)</label><label class="chk" id="u_activeL"><input type="checkbox" id="u_active"> Accès actif</label></div>
+    <div class="chks"><label class="chk"><input type="checkbox" id="u_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="u_export"> Peut exporter (Excel, My Maps, sauvegarde)</label><label class="chk" id="u_activeL"><input type="checkbox" id="u_active"> Accès actif</label></div>
     <span class="note">Laisse la date vide pour un accès sans limite. Un compte suspendu ou expiré ne voit plus rien ; ses témoins restent dans Valtera.</span>
   </div>
   <div class="df"><button class="btn bad" id="uDel" type="button">Retirer l’accès</button><span class="note" id="uNote"></span><button class="btn pri" id="uSave" type="button">Enregistrer</button></div>
 </dialog>
+
+<dialog id="visDlg" class="wide">
+  <div class="dh"><div><h2 id="visTitle">Fiche de visite</h2><div class="meta">Date, visiteur, position, ville et quartier se remplissent tout seuls quand c’est possible.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db" id="visBody"></div>
+  <input type="file" id="vPhotoIn" accept="image/*" multiple hidden><input type="file" id="vCamIn" accept="image/*" capture="environment" hidden>
+  <div class="df"><button class="btn bad" id="visDel" type="button" hidden>Supprimer</button><label class="chk"><input type="checkbox" id="visDone"> Fiche terminée</label><span class="note" id="visNote"></span>
+    <button class="btn" id="visCopy" type="button">Copier le texte</button><button class="btn" id="visTemoin" type="button" hidden>Créer un témoin</button><button class="btn" id="visPrint" type="button" hidden>Imprimer / PDF</button><button class="btn pri" id="visSave" type="button">Enregistrer</button></div>
+</dialog>
+<div id="printArea" aria-hidden="true"></div>
 <dialog id="imp">
   <div class="dh"><h2>Importer</h2><button class="btn" type="button" data-close>Fermer</button></div>
   <div class="db" id="impBody"></div>

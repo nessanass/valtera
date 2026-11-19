@@ -76,6 +76,7 @@ function applyRoleUi(){
   ["#importBtn","#csvBtn","#mRestore"].forEach(s=>{const e=$(s);if(e)e.hidden=!isOwner()});
   ["#exportBtn","#kmlExport","#mBackup"].forEach(s=>{const e=$(s);if(e)e.hidden=!canExport()});
   $("#modAdmin").hidden=!isOwner();if(!isOwner()&&curMod==="admin")showMod("temoins");
+  $("#modVisites").hidden=!!ME.role&&!canVisites();if(!canVisites()&&curMod==="visites")showMod("temoins");
   $("#setSave").hidden=!!ME.role&&!isOwner();$("#setRO").hidden=!ME.role||isOwner();
   $("#acctMail").textContent=ME.email?(ME.email+(ME.role?" · "+ROLE_LBL[ME.role]:"")):"";$("#mLogout").hidden=!ME.uid;
 }
@@ -120,7 +121,7 @@ function rebuild(){items=Object.keys(PUB).map(id=>{const p=PUB[id],q=PRIV[id];
 let refsChecked=false;
 function scheduleRender(){clearTimeout(mergeT);mergeT=setTimeout(()=>{rebuild();loaded=true;render();
   if(!refsChecked&&!syncMeta.fromCache&&online){refsChecked=true;(isOwner()?ensureCounter():Promise.resolve()).then(fixRefs)}updateAcct();if($("#view").open&&viewing){const c=items.find(x=>x.id===viewing.id);if(c)viewing=c}if($("#etude").open)renderEtude();if(curMod==="admin")renderAdmin()},60)}
-function stopListen(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];stopAdmin()}
+function stopListen(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];stopAdmin();stopVisites()}
 function listenErr(e){if(e?.code==="permission-denied"){toast("Accès refusé par le serveur : reconnecte-toi.");$("#status").textContent="Ton accès a changé : recharge la page."}else $("#status").textContent="Connexion interrompue : les données affichées viennent de cet appareil."}
 function listen(){
   stopListen();Object.keys(PUB).forEach(k=>delete PUB[k]);Object.keys(PRIV).forEach(k=>delete PRIV[k]);
@@ -130,6 +131,7 @@ function listen(){
   if(canAdd()){const q=isOwner()?pCol():pCol().where("createdBy","==",ME.uid);
     unsubs.push(q.onSnapshot(s=>{s.docChanges().forEach(ch=>{if(ch.type==="removed")delete PRIV[ch.doc.id];else PRIV[ch.doc.id]=ch.doc.data()});scheduleRender()},()=>{}))}
   unsubs.push(fdb.collection("etudes").where("createdBy","==",ME.uid).onSnapshot(s=>{etudes=s.docs.map(d=>({...d.data(),id:d.id}));if($("#etudesDlg").open)renderEtudes()},()=>{}));
+  listenVisites();
   unsubs.push(fdb.doc("config/settings").onSnapshot(d=>{if(d.exists){const x=d.data();for(const k in S)if(x[k]!=null&&isFinite(+x[k]))S[k]=+x[k];scheduleRender()}},()=>{}));
 }
 /* écriture : attend le serveur s'il répond vite, sinon reste en file d'attente sur l'appareil */
@@ -905,6 +907,7 @@ function mapClickPopup(ll){const g=[+ll.lat.toFixed(6),+ll.lng.toFixed(6)],s=gps
   const el=h("div",{class:"mc-pop"},h("div",{class:"num",text:s}),h("div",{class:"acts"},
     canAdd()?h("button",{class:"btn sm pri",type:"button",text:"Nouveau témoin ici",onclick:()=>{map.closePopup();openForm();$("#f_gps").value=s;$("#f_gps").dispatchEvent(new Event("input"))}}):null,
     h("button",{class:"btn sm",type:"button",text:"Comparables autour",onclick:()=>{map.closePopup();$("#near").value=s;if(!$("#radius").value)$("#radius").value="500";$("#filters").hidden=false;shown=0;mv=null;render()}}),
+    canVisites()?h("button",{class:"btn sm",type:"button",text:"Fiche de visite ici",onclick:()=>{map.closePopup();openVisite(null,{gps:s});autoPlace()}}):null,
     h("button",{class:"btn sm",type:"button",text:"Copier",onclick:e=>copyText(s,e.target)})));
   L.popup({maxWidth:300}).setLatLng(ll).setContent(el).openOn(map)}
 function showOnMap(c){const g=gpsOf(c);if(!g){toast("Cette fiche n’a pas de position GPS.");return}
@@ -923,14 +926,16 @@ $("#kmlExport").onclick=async()=>{closeMenu();const r=filtered().filter(c=>gpsOf
   await saveFile("valtera_temoins_"+new Date().toISOString().slice(0,10)+".kml",kml)};
 /* ===================== modules ===================== */
 let curMod="temoins";
-const MOD_SOON={visites:"Fiches de visite",dossiers:"Dossiers",ia:"Assistant IA"};
+const MOD_SOON={dossiers:"Dossiers",ia:"Assistant IA"};
 function showMod(m){
   if(MOD_SOON[m]){toast("« "+MOD_SOON[m]+" » arrive dans une prochaine version de Valtera.");return}
   if(m==="admin"&&!isOwner())m="temoins";
+  if(m==="visites"&&!canVisites())m="temoins";
   curMod=m;$$("#mods button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
-  $("#temoinsView").hidden=m!=="temoins";$("#adminView").hidden=m!=="admin";
+  $("#temoinsView").hidden=m!=="temoins";$("#adminView").hidden=m!=="admin";$("#visitesView").hidden=m!=="visites";
   ["#addBtn","#pasteBtn","#tray"].forEach(s=>$(s).classList.toggle("mod-off",m!=="temoins"));
   if(m==="admin"){listenAdmin();renderAdmin()}
+  if(m==="visites"){listenVisites();renderVisites()}
   if(m==="temoins"&&view==="map"&&map)setTimeout(()=>map.invalidateSize(),60);
   window.scrollTo({top:0})}
 $("#mods").addEventListener("click",e=>{const b=e.target.closest("button[data-m]");if(b)showMod(b.dataset.m)});
@@ -967,7 +972,7 @@ function renderAdmin(){
     tb.append(h("tr",{style:"cursor:default"},
       h("td",{class:"wrap"},h("b",{text:r.name||r.email}),r.name?h("div",{class:"meta",text:r.email}):null),
       h("td",{text:ROLE_LBL[r.role]||r.role||"—"}),
-      h("td",{class:"wrap",text:r.role==="owner"?"Tout":["Témoins",r.modules.includes("export")?"export":""].filter(Boolean).join(" + ")}),
+      h("td",{class:"wrap",text:r.role==="owner"?"Tout":["Témoins",r.modules.includes("visites")&&r.role==="collab"?"Visites":"",r.modules.includes("export")?"export":""].filter(Boolean).join(" + ")}),
       h("td",{class:"num",text:r.role==="owner"?"—":(r.expires?dateFr(r.expires):"Sans limite")}),
       h("td",null,h("span",{class:"chip "+cl,text:st})),
       h("td",{class:"num r",text:r.uid?fmt(byUid[r.uid]||0):"—"}),
@@ -981,23 +986,23 @@ $("#invForm").addEventListener("submit",async e=>{e.preventDefault();
   const email=$("#i_email").value.trim().toLowerCase();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("#invNote").textContent="Adresse e-mail invalide.";return}
   if(email===ME.email){$("#invNote").textContent="C’est ton propre compte.";return}
-  const mods=["temoins"].concat($("#i_m_export").checked?["export"]:[]);
+  const mods=["temoins"].concat($("#i_m_visites").checked?["visites"]:[],$("#i_m_export").checked?["export"]:[]);
   const inv={email,role:$("#i_role").value,modules:mods,expires:expTs($("#i_expires").value),invitedAt:Date.now()};
   $("#invBtn").disabled=true;
   try{await commitSoft(fdb.doc("invites/"+email).set(inv));
     const link=appLink();
     $("#invNote").replaceChildren("Invitation enregistrée pour ",h("b",{text:email}),". Envoie-lui le lien de Valtera ; il se connecte avec ce compte Google : ",h("span",{class:"num",text:link})," ",h("button",{class:"btn sm",type:"button",text:"Copier le lien",onclick:ev=>copyText(link,ev.target)}));
-    $("#i_email").value="";$("#i_expires").value="";$("#i_m_export").checked=false}
+    $("#i_email").value="";$("#i_expires").value="";$("#i_m_export").checked=false;$("#i_m_visites").checked=false}
   catch(err){$("#invNote").textContent=errMsg(err,"Invitation non enregistrée.")}
   $("#invBtn").disabled=false});
 let uEdit=null,uDelArmed=false;
 function openUser(r){uEdit=r;uDelArmed=false;$("#uDel").classList.remove("arm");$("#uDel").textContent="Retirer l’accès";
   $("#uTitle").textContent=r.name||r.email;$("#uMail").textContent=r.email+(r.joined?"":" · invitation en attente");
-  $("#u_role").value=r.role==="reader"?"reader":"collab";$("#u_export").checked=r.modules.includes("export");
+  $("#u_role").value=r.role==="reader"?"reader":"collab";$("#u_export").checked=r.modules.includes("export");$("#u_visites").checked=r.modules.includes("visites");
   $("#u_expires").value=isoDay(r.expires);$("#u_active").checked=r.active;$("#u_activeL").hidden=!r.joined;$("#uNote").textContent="";
   $("#uDlg").showModal()}
 $("#uSave").onclick=async()=>{const r=uEdit;if(!r)return;
-  const upd={role:$("#u_role").value,modules:["temoins"].concat($("#u_export").checked?["export"]:[]),expires:expTs($("#u_expires").value)};
+  const upd={role:$("#u_role").value,modules:["temoins"].concat($("#u_visites").checked?["visites"]:[],$("#u_export").checked?["export"]:[]),expires:expTs($("#u_expires").value)};
   $("#uSave").disabled=true;
   try{const b=fdb.batch();
     if(r.uid)b.update(fdb.doc("users/"+r.uid),{...upd,active:$("#u_active").checked});
@@ -1009,6 +1014,212 @@ $("#uDel").onclick=async()=>{const r=uEdit;if(!r)return;
   if(!uDelArmed){uDelArmed=true;$("#uDel").classList.add("arm");$("#uDel").textContent="Confirmer : retirer l’accès";return}
   try{const b=fdb.batch();if(r.uid)b.delete(fdb.doc("users/"+r.uid));b.delete(fdb.doc("invites/"+r.email));await commitSoft(b.commit());$("#uDlg").close();toast("Accès retiré. Ses témoins restent dans Valtera.")}
   catch(e){$("#uNote").textContent=errMsg(e)}};
+/* ===================== module Fiches de visite ===================== */
+let visites=[],visEditing=null,visPhotos=[],visRefs=[],visDelArmed=false,visQ="",visUnsub=null;
+function canVisites(){return isOwner()||(ME.modules.includes("visites")&&ME.role==="collab")}
+const CH={on:["Oui","Non"],bmf:["B","M","F"]};
+const TYPO_SUB={"Maison":["Unifamiliale","Multifamiliale"],"Villa":["Isolée","En bande","Jumelée"],"Local commercial":["Avec accès rue","Sans accès rue"]};
+const VIS_SECTIONS=[
+ {t:"Dossier et adresse",f:[["dossier","Numéro du dossier"],["date","Date de la visite","date"],["visiteur","Visiteur"],["contact","Contact (personne rencontrée)"],["contactTel","Téléphone du contact","tel"],
+   ["gps","Coordonnées","gps"],["ville","Ville"],["quartier","Quartier"],["commune","Municipalité / Commune"],["rue","Rue","text",2],["residence","Résidence"],["num","N°"],["ilot","Îlot"],["porte","Porte"],["etage","Étage"],["codePostal","Code postal"],
+   ["orientation","Orientation","chips",["Nord","Sud","Est","Ouest","Nord-Est","Nord-Ouest","Sud-Est","Sud-Ouest"]]]},
+ {t:"Typologie",f:[["typo","Type de bien","chips",["Maison","Appartement","Villa","Local commercial","Usine","Autre"]],["typoSub","Précision","chips",[]],["resType","Résidence","chips",["Principale","Secondaire"]]]},
+ {t:"Construction",f:[["nLog","N. logements","num"],["nLc","N. locaux commerciaux","num"],["nBureaux","N. bureaux","num"],["nAsc","N. ascenseurs","num"],["nEtages","N. étages","num"],["garage","Garage"],["ssol","Sous-sol"],
+   ["hsp","HSP (LC et usine)","chips",["Inf","Sup"]],["terrasse","Terrasse","chips",["Accessible","Non accessible"]]]},
+ {t:"Aménagements extérieurs",f:[["jardin","Jardin","chips",CH.on],["piscine","Piscine","chips",CH.on],["tsport","Terrain de sport","chips",CH.on],["cloturee","Clôturée","chips",CH.on],
+   ["clim","Chauffage / clim","chips",CH.on],["chauffeEau","Chauffe-eau","chips",["Gaz","Électrique","Non"]],["incendie","Sécurité incendie","chips",["Pré-installation","Oui","Non"]]]},
+ {t:"Équipement du quartier",note:"B bon · M moyen · F faible",f:[["eqCommercial","Commercial","chips",CH.bmf],["eqLoisirs","Loisirs","chips",CH.bmf],["eqScolaire","Scolaire","chips",CH.bmf],["eqSante","Santé","chips",CH.bmf],["eqSportif","Sportif","chips",CH.bmf],
+   ["eqReligieux","Religieux","chips",["Suffisant","Insuffisant"]],["eqBus","Bus","chips",CH.on]]},
+ {t:"Description",f:[["chambres","Nbre de chambres","num"],["sdb","Nbre de SDB / WC","num"],["piecesExt","Pièces extérieures","num"],["piecesTot","Pièces totales","num"],["sConst","Surface construite (m²)","num"],["sTerrain","Surface terrain (m²)","num"],
+   ["occupation","Usager","chips",["Propriétaire","Locataire","Inoccupé"]],["age","Âge du bien (ans)","num"],["renov","Dernière rénovation"]]},
+ {t:"Qualité constructive",rooms:true,f:[["docs","Documents en possession lors de la visite","multi",["CP","PC","P. autorisé","Autre"]],["docsAutre","Autre document"]]},
+ {t:"Valeur et références",refs:true,f:[["valeur","Valeur du bien estimée (DH)","num"]]},
+ {t:"Remarques",f:[["remarques","Remarques","area",null,3]]}
+];
+const VIS_FIELDS=VIS_SECTIONS.flatMap(s=>s.f);
+const ROOM_DEF=["Séjour","Chambres","Cuisine","SDB / WC"];
+const visCol=()=>fdb.collection("visites");
+function visRefStr(n){return "V-"+String(n).padStart(4,"0")}
+
+/* ---------- données ---------- */
+function listenVisites(){if(visUnsub||!canVisites()||!fdb)return;
+  const q=isOwner()?visCol():visCol().where("createdBy","==",ME.uid);
+  visUnsub=q.onSnapshot(s=>{visites=s.docs.map(d=>({...d.data(),id:d.id}));if(curMod==="visites")renderVisites();if(!s.metadata.fromCache){if(isOwner())ensureVisCounter().then(fixVisRefs);else fixVisRefs()}},e=>toast(errMsg(e,"Fiches de visite indisponibles.")))}
+function stopVisites(){if(visUnsub){try{visUnsub()}catch(e){}visUnsub=null}}
+let visCounterOk=false;
+async function ensureVisCounter(){if(visCounterOk||!isOwner())return;visCounterOk=true;try{const c=await fdb.doc("counters/visites").get();if(!c.exists)await fdb.doc("counters/visites").set({n:Math.max(0,...visites.map(v=>+((v.ref||"").slice(2))||0))})}catch(e){visCounterOk=false}}
+let visFixing=false;
+async function fixVisRefs(){if(visFixing||!navigator.onLine)return;visFixing=true;try{for(const v of visites.filter(v=>!v.ref&&v.createdBy===ME.uid).slice(0,10))await assignVisRef(v.id)}catch(e){}visFixing=false}
+async function assignVisRef(id){const cRef=fdb.doc("counters/visites"),vRef=visCol().doc(id);
+  return fdb.runTransaction(async t=>{const c=await t.get(cRef),d=await t.get(vRef);if(!d.exists||d.data().ref)return;
+    if(!c.exists){if(!isOwner())return;t.set(cRef,{n:1});t.update(vRef,{ref:visRefStr(1)});return}
+    const n=(c.data().n||0)+1;t.update(cRef,{n});t.update(vRef,{ref:visRefStr(n)})})}
+
+/* ---------- liste ---------- */
+function visTitle(v){return [v.typo,v.typoSub].filter(Boolean).join(" · ")||"Bien à préciser"}
+function visAddr(v){return [[v.residence,v.num&&("N° "+v.num),v.rue].filter(Boolean).join(", "),[v.quartier,v.ville].filter(Boolean).join(", ")].filter(Boolean).join(" – ")}
+function renderVisites(){
+  const L=$("#visList");L.innerHTML="";const q=visQ.trim().toLowerCase();
+  const r=visites.filter(v=>!q||[v.ref,v.dossier,v.ville,v.quartier,v.rue,v.residence,v.typo,v.contact,v.visiteur,v.remarques].join(" ").toLowerCase().includes(q))
+    .sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+  $("#visCount").textContent=visites.length?visites.length+" fiche"+(visites.length>1?"s":""):"";
+  if(!r.length){L.append(h("div",{class:"empty"},h("b",{text:visites.length?"Aucune fiche ne correspond.":"Aucune fiche de visite pour l’instant."}),h("p",{class:"meta",text:visites.length?"Change la recherche.":"Sur place, appuie sur « + Nouvelle fiche » : la date, le visiteur, la position GPS, la ville et le quartier se remplissent tout seuls, et Valtera propose les témoins proches comme éléments de référence."})));return}
+  r.forEach(v=>{const done=v.status==="terminee";
+    L.append(h("article",{class:"vcard",onclick:()=>openVisite(v)},
+      h("div",{class:"vtop"},h("span",{class:"num vref",text:v.ref||"V-…"}),h("span",{class:"chip "+(done?"st-ok":"st-warn"),text:done?"Terminée":"Brouillon"}),v.dossier?h("span",{class:"meta",text:"Dossier "+v.dossier}):null),
+      h("div",{class:"vt",text:visTitle(v)}),
+      h("div",{class:"meta",text:visAddr(v)||"Adresse à compléter"}),
+      h("div",{class:"meta",text:[v.date?new Date(v.date).toLocaleDateString("fr-FR"):"",v.visiteur,v.valeur?fmt(v.valeur)+" DH":"",(v.refs||[]).length?(v.refs.length+" référence"+(v.refs.length>1?"s":"")):""].filter(Boolean).join(" · ")})))})}
+$("#visSearch").addEventListener("input",e=>{visQ=e.target.value;renderVisites()});
+
+/* ---------- formulaire ---------- */
+function chipsEl(key,opts,multi){const d=h("div",{class:"chips","data-k":key,role:"group"});
+  opts.forEach(o=>d.append(h("button",{type:"button","data-v":o,"aria-pressed":"false",text:o,onclick:e=>{const b=e.currentTarget,on=b.getAttribute("aria-pressed")!=="true";
+    if(!multi)d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed",on?"true":"false");if(key==="typo")updTypoSub()}})));return d}
+function buildVisForm(){
+  const B=$("#visBody");B.innerHTML="";
+  VIS_SECTIONS.forEach(s=>{const fs=h("fieldset",null,h("legend",{text:s.t}));if(s.note)fs.append(h("p",{class:"note",text:s.note}));
+    const g=h("div",{class:"fgrid"});
+    s.f.forEach(([k,l,type="text",opts,span])=>{
+      if(type==="chips"||type==="multi"){g.append(h("div",{class:"fchips s-all"},h("span",{class:"lbl",text:l}),chipsEl(k,opts||[],type==="multi")));return}
+      if(type==="gps"){g.append(h("label",{class:"s2"},l,h("div",{class:"gpsrow"},h("input",{id:"v_gps",inputmode:"decimal",placeholder:"33.5731, -7.5898",autocomplete:"off"}),h("button",{class:"btn sm",type:"button",id:"vGpsMe",text:"Ma position",onclick:visGpsMe}))));return}
+      if(type==="area"){g.append(h("label",{class:"s-all"},l,h("textarea",{id:"v_"+k,rows:span||3})));return}
+      g.append(h("label",{class:span===2?"s2":null},l,h("input",{id:"v_"+k,type:type==="num"?"text":type,inputmode:type==="num"?"decimal":null,autocomplete:"off"})))});
+    fs.append(g);
+    if(s.rooms){fs.insertBefore(h("div",{class:"rooms"},h("div",{class:"tblwrap flat"},h("table",{class:"t",id:"vRooms"})),h("button",{class:"btn sm",type:"button",text:"+ Ajouter une pièce",onclick:()=>{addRoom({});}})),g)}
+    if(s.refs){fs.append(h("div",{class:"refs"},h("div",{class:"refhead"},h("b",{text:"Éléments de référence"}),h("span",{class:"meta",id:"vRefInfo"})),
+      h("div",{class:"tblwrap flat"},h("table",{class:"t",id:"vRefTbl"})),
+      h("div",{class:"acts",style:"padding:0"},h("button",{class:"btn sm",type:"button",text:"Proposer les témoins proches",onclick:proposeRefs}),h("button",{class:"btn sm",type:"button",text:"Ajouter par référence (T-…)",onclick:addRefByCode})),
+      h("div",{id:"vRefPick"})))}
+    B.append(fs)});
+  B.append(h("fieldset",null,h("legend",{text:"Photos"}),h("div",{class:"thumbs",id:"vThumbs"}),h("div",{class:"acts",style:"padding:0"},
+    h("button",{class:"btn sm",type:"button",id:"vCamBtn",text:"Prendre une photo",onclick:()=>$("#vCamIn").click()}),h("button",{class:"btn sm",type:"button",id:"vPhotoBtn",text:"+ Ajouter des photos",onclick:()=>$("#vPhotoIn").click()}))));
+}
+function setChips(k,v){const d=$('#visBody .chips[data-k="'+k+'"]');if(!d)return;const vals=Array.isArray(v)?v:[v];d.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",vals.includes(b.dataset.v)?"true":"false"))}
+function getChips(k,multi){const d=$('#visBody .chips[data-k="'+k+'"]');if(!d)return multi?[]:"";const on=[...d.querySelectorAll('button[aria-pressed="true"]')].map(b=>b.dataset.v);return multi?on:(on[0]||"")}
+function updTypoSub(keep){const t=getChips("typo"),d=$('#visBody .chips[data-k="typoSub"]'),cur=keep??getChips("typoSub");d.innerHTML="";
+  const opts=TYPO_SUB[t]||[];d.closest(".fchips").hidden=!opts.length;
+  opts.forEach(o=>d.append(h("button",{type:"button","data-v":o,"aria-pressed":o===cur?"true":"false",text:o,onclick:e=>{const b=e.currentTarget,on=b.getAttribute("aria-pressed")!=="true";d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed",on?"true":"false")}})))}
+function addRoom(r){const T=$("#vRooms");if(!T.tHead)T.append(h("thead",null,h("tr",null,...["Pièce","Revêtement sol","Murs","Plafond","Menuiserie int.",""].map(l=>h("th",{"data-k":""},l)))),h("tbody"));
+  const tr=h("tr",{style:"cursor:default"},...["piece","sol","murs","plafond","menuiserie"].map(k=>h("td",null,h("input",{"data-r":k,value:r[k]||"","aria-label":k}))),
+    h("td",null,h("button",{class:"btn sm",type:"button",text:"✕","aria-label":"Retirer la pièce",onclick:()=>tr.remove()})));T.tBodies[0].append(tr)}
+function readRooms(){return [...$$("#vRooms tbody tr")].map(tr=>{const o={};tr.querySelectorAll("input").forEach(i=>o[i.dataset.r]=i.value.trim());return o}).filter(o=>Object.values(o).some(Boolean))}
+function openVisite(v,preset){
+  if(!canVisites()){toast(errMsg({code:"permission-denied"}));return}
+  visEditing=v||null;visDelArmed=false;$("#visDel").classList.remove("arm");$("#visDel").textContent="Supprimer";
+  buildVisForm();const d=v||{date:new Date().toISOString().slice(0,10),visiteur:ME.name,pieces:ROOM_DEF.map(p=>({piece:p})),...(preset||{})};
+  VIS_FIELDS.forEach(([k,l,type])=>{if(type==="chips"||type==="multi"){if(k!=="typoSub")setChips(k,d[k]||(type==="multi"?[]:""));return}const e=$("#v_"+k);if(e)e.value=d[k]!=null?(type==="num"?plain(d[k]):d[k]):""});
+  updTypoSub(d.typoSub||"");(d.pieces||[]).forEach(addRoom);if(!(d.pieces||[]).length)ROOM_DEF.forEach(p=>addRoom({piece:p}));
+  visPhotos=[...(d.photos||[])];renderVisThumbs();visRefs=[...(d.refs||[])];renderRefs();$("#vRefPick").innerHTML="";
+  $("#visTitle").textContent=v?(v.ref||"Fiche de visite")+(v.dossier?" · dossier "+v.dossier:""):"Nouvelle fiche de visite";
+  $("#visDone").checked=d.status==="terminee";$("#visDel").hidden=!v||!isOwner();$("#visPrint").hidden=$("#visTemoin").hidden=!v;$("#visNote").textContent="";
+  $("#visDlg").showModal();$("#visDlg").scrollTop=0;
+  if(!v&&!d.gps)visGpsMe(true);
+}
+function readVisite(){
+  const o={};VIS_FIELDS.forEach(([k,l,type])=>{if(type==="chips")o[k]=getChips(k);else if(type==="multi")o[k]=getChips(k,true);else{const e=$("#v_"+k);if(!e)return;const val=e.value.trim();o[k]=type==="num"?(val===""?null:numIn(val)):val}});
+  o.gps=$("#v_gps").value.trim();const g=coordsFrom(o.gps);if(g)o.gps=gpsStr(g);
+  o.pieces=readRooms();o.refs=[...visRefs];o.photos=[...visPhotos];o.status=$("#visDone").checked?"terminee":"brouillon";return o}
+$("#visSave").onclick=async()=>{const o=readVisite(),base=visEditing,b=$("#visSave");
+  if(o.gps&&!coordsFrom(o.gps)){$("#visNote").textContent="Coordonnées illisibles : écris « latitude, longitude »."; return}
+  const id=base?.id||("v"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+  const doc={...o,ref:base?.ref||"",createdBy:base?.createdBy||ME.uid,byName:base?base.byName||"":ME.name,createdAt:base?.createdAt||Date.now(),updatedAt:Date.now()};
+  b.disabled=true;
+  try{const st=await commitSoft(visCol().doc(id).set(JSON.parse(JSON.stringify(doc))));if(!doc.ref&&navigator.onLine)assignVisRef(id).catch(()=>{});
+    $("#visDlg").close();toast(st==="queued"?"Fiche enregistrée sur l’appareil : envoi au retour du réseau.":"Fiche de visite enregistrée")}
+  catch(e){$("#visNote").textContent=errMsg(e)}
+  b.disabled=false};
+$("#visDel").onclick=async()=>{if(!visEditing||!isOwner())return;
+  if(!visDelArmed){visDelArmed=true;$("#visDel").classList.add("arm");$("#visDel").textContent="Confirmer la suppression";return}
+  try{const b=fdb.batch();b.delete(visCol().doc(visEditing.id));(visEditing.photos||[]).forEach(p=>{b.delete(phCol().doc(p.id));if(p.t&&p.t!==p.id)b.delete(phCol().doc(p.t))});await commitSoft(b.commit());$("#visDlg").close();toast("Fiche supprimée")}
+  catch(e){$("#visNote").textContent=errMsg(e)}};
+$("#visAdd").onclick=()=>openVisite(null);
+
+/* ---------- remplissage automatique : position, ville, quartier ---------- */
+async function visGpsMe(silent){const b=$("#vGpsMe");if(!b)return;b.disabled=true;b.textContent="Recherche…";
+  try{const [la,lo,acc]=await getPos();if(!$("#visDlg").open)return;$("#v_gps").value=gpsStr([+la.toFixed(6),+lo.toFixed(6)]);autoPlace();if(silent!==true)toast("Position enregistrée (± "+Math.round(acc||0)+" m)")}
+  catch(e){if(silent!==true)geoErr(e)}
+  b.disabled=false;b.textContent="Ma position"}
+function nearest(g,maxM){return items.map(c=>({c,g:gpsOf(c)})).filter(x=>x.g).map(x=>({c:x.c,d:distM(g,x.g)})).filter(x=>x.d<=maxM).sort((a,b)=>a.d-b.d)}
+function autoPlace(){const g=coordsFrom($("#v_gps").value);if(!g)return;const n=nearest(g,900);
+  const pick=k=>{const cnt={};n.slice(0,15).forEach(x=>{const v=(x.c[k]||"").trim();if(v)cnt[v]=(cnt[v]||0)+1});return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||""};
+  if(!$("#v_ville").value){const v=pick("city");if(v)$("#v_ville").value=v}
+  if(!$("#v_quartier").value){const v=pick("district");if(v)$("#v_quartier").value=v}}
+$("#visBody").addEventListener("change",e=>{if(e.target.id==="v_gps")autoPlace()});
+
+/* ---------- éléments de référence (témoins) ---------- */
+const TYPO_TO_TYPE={"Maison":["Maison","Villa"],"Appartement":["Appartement"],"Villa":["Villa","Maison"],"Local commercial":["Local commercial"],"Usine":["Usine","Entrepôt / dépôt"]};
+function refOrigin(c){const s=(c.source+" "+c.nature+" "+c.contactName).toLowerCase();return /agence|agenz|mubawab|avito|sax|immo/.test(s)?"Ag. immob":"Particulier"}
+function renderRefs(){const T=$("#vRefTbl");T.innerHTML="";const g=coordsFrom($("#v_gps")?.value||"");
+  $("#vRefInfo").textContent=visRefs.length?visRefs.length+" témoin"+(visRefs.length>1?"s":""):"Aucun pour l’instant";
+  if(!visRefs.length)return;
+  T.append(h("thead",null,h("tr",null,...["Réf.","Typologie","Prix","Tél","Adresse","Origine",""].map(l=>h("th",{"data-k":""},l)))));
+  const tb=h("tbody");visRefs.forEach(id=>{const c=items.find(x=>x.id===id);
+    if(!c){tb.append(h("tr",{style:"cursor:default"},h("td",{colspan:6,class:"meta",text:"Témoin introuvable (supprimé ?)"}),h("td",null,h("button",{class:"btn sm",type:"button",text:"✕",onclick:()=>{visRefs=visRefs.filter(x=>x!==id);renderRefs()}}))));return}
+    const cg=gpsOf(c),d=g&&cg?distM(g,cg):null;
+    tb.append(h("tr",{style:"cursor:default"},h("td",{class:"num",text:c.ref||"—"}),h("td",{text:[c.type,c.tx!=="Vente"?c.tx:""].filter(Boolean).join(" · ")}),
+      h("td",{class:"num",text:fmt(c.price)+priceSuf(c.tx)}),h("td",{class:"num",text:c.contactTel||"—"}),
+      h("td",{class:"wrap",text:[c.address,c.district,c.city].filter(Boolean).join(", ")+(d!=null?" · à "+Math.round(d)+" m":"")}),h("td",{text:refOrigin(c)}),
+      h("td",null,h("button",{class:"btn sm",type:"button",text:"✕","aria-label":"Retirer",onclick:()=>{visRefs=visRefs.filter(x=>x!==id);renderRefs()}}))))});
+  T.append(tb)}
+function proposeRefs(){const P=$("#vRefPick");P.innerHTML="";const g=coordsFrom($("#v_gps").value);
+  if(!g){P.append(h("p",{class:"note",text:"Ajoute d’abord les coordonnées (bouton « Ma position »)."}));return}
+  const types=TYPO_TO_TYPE[getChips("typo")]||null;
+  let n=nearest(g,1500).filter(x=>!visRefs.includes(x.c.id));if(types)n=n.filter(x=>types.includes(x.c.type));n=n.slice(0,12);
+  if(!n.length){P.append(h("p",{class:"note",text:"Aucun témoin"+(types?" de ce type":"")+" à moins de 1,5 km."}));return}
+  P.append(h("p",{class:"note",text:"Témoins à moins de 1,5 km"+(types?" ("+types.join(", ")+")":"")+". Touche pour ajouter."}));
+  const box=h("div",{class:"refpick"});
+  n.forEach(({c,d})=>box.append(h("button",{type:"button",class:"refopt",onclick:e=>{visRefs.push(c.id);e.currentTarget.remove();renderRefs()}},
+    h("b",{class:"num",text:(c.ref||"")+" · "+fmt(c.price)+priceSuf(c.tx)}),h("span",{class:"meta",text:[c.type,c.surface?plain(c.surface)+" m²":"",Math.round(d)+" m"].filter(Boolean).join(" · ")}))));
+  P.append(box)}
+function addRefByCode(){const P=$("#vRefPick");P.innerHTML="";const inp=h("input",{placeholder:"T-0123",style:"max-width:140px"});
+  const go=()=>{const v=inp.value.trim().toUpperCase().replace(/^T-?(\d+)$/,(m,d)=>"T-"+d.padStart(4,"0"));const c=items.find(x=>(x.ref||"").toUpperCase()===v);
+    if(!c){toast("Aucun témoin "+v+".");return}if(!visRefs.includes(c.id))visRefs.push(c.id);renderRefs();P.innerHTML=""};
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go()}});
+  P.append(h("div",{class:"gpsrow"},inp,h("button",{class:"btn sm pri",type:"button",text:"Ajouter",onclick:go})));inp.focus()}
+
+/* ---------- photos ---------- */
+function renderVisThumbs(){const T=$("#vThumbs");T.innerHTML="";
+  visPhotos.forEach((p,i)=>T.append(h("div",{class:"th"},h("img",{"data-pid":p.t||p.id,src:photoUrl(p,1),alt:"Photo "+(i+1)}),h("button",{type:"button",class:"x","aria-label":"Retirer la photo",text:"✕",onclick:()=>{visPhotos.splice(i,1);renderVisThumbs()}}))));
+  if(!visPhotos.length)T.append(h("span",{class:"meta",text:"Aucune photo."}))}
+async function visAddPhotos(e){const files=[...e.target.files];e.target.value="";if(!files.length)return;
+  $("#vPhotoBtn").disabled=$("#vCamBtn").disabled=true;
+  for(const f of files){try{const big=await fitPhoto(f,[[1600,.8],[1280,.74],[1024,.68]]),small=await fitPhoto(f,[[480,.72]]);
+    const tag="visite:"+(visEditing?.id||"");const id=await store.uploadPhoto(big,tag),t=await store.uploadPhoto(small,tag);visPhotos.push({id,t});renderVisThumbs()}
+    catch(err){toast(errMsg(err,"Une photo n’a pas pu être envoyée."))}}
+  $("#vPhotoBtn").disabled=$("#vCamBtn").disabled=false}
+$("#vPhotoIn").onchange=visAddPhotos;$("#vCamIn").onchange=visAddPhotos;
+
+/* ---------- impression / PDF, texte, témoin ---------- */
+function visText(v){const L=[];L.push("FICHE DE VISITE "+(v.ref||"")+(v.dossier?" – Dossier "+v.dossier:""));
+  L.push("Date : "+(v.date?new Date(v.date).toLocaleDateString("fr-FR"):"")+" · Visiteur : "+(v.visiteur||""));
+  VIS_SECTIONS.forEach(s=>{const parts=s.f.map(([k,l])=>{const x=v[k];if(x==null||x===""||(Array.isArray(x)&&!x.length))return null;if(k==="dossier"||k==="date"||k==="visiteur")return null;return l+" : "+(Array.isArray(x)?x.join(", "):typeof x==="number"?plain(x):x)}).filter(Boolean);
+    if(s.rooms&&(v.pieces||[]).length)parts.unshift(...v.pieces.map(p=>[p.piece,[p.sol,p.murs,p.plafond,p.menuiserie].filter(Boolean).join(" / ")].filter(Boolean).join(" : ")));
+    if(s.refs&&(v.refs||[]).length)parts.push("Références : "+v.refs.map(id=>{const c=items.find(x=>x.id===id);return c?(c.ref||"")+" "+(c.type||"")+" "+fmt(c.price)+priceSuf(c.tx):""}).filter(Boolean).join(" ; "));
+    if(parts.length){L.push("");L.push(s.t.toUpperCase());parts.forEach(p=>L.push("- "+p))}});
+  return L.join("\n")}
+function printVisite(v){const A=$("#printArea");A.innerHTML="";
+  const cell=(l,x)=>h("div",{class:"pc"},h("span",{class:"pl",text:l}),h("span",{class:"pv",text:x==null||x===""?"":Array.isArray(x)?x.join(", "):typeof x==="number"?plain(x):String(x)}));
+  A.append(h("div",{class:"ph"},h("div",null,h("div",{class:"pbrand",text:"Valtera"}),h("h1",{text:"Fiche de visite"})),h("div",{class:"pref"},h("b",{class:"num",text:v.ref||""}),h("div",{text:v.dossier?"Dossier "+v.dossier:""}))));
+  VIS_SECTIONS.forEach(s=>{const sec=h("section",{class:"ps"},h("h2",{text:s.t}));const g=h("div",{class:"pg"});
+    s.f.forEach(([k,l,type])=>{if(k==="typoSub"&&!v.typoSub)return;g.append(cell(l,k==="date"&&v.date?new Date(v.date).toLocaleDateString("fr-FR"):v[k]))});sec.append(g);
+    if(s.rooms){const t=h("table",{class:"pt"},h("tr",null,...["Pièce","Revêtement sol","Murs","Plafond","Menuiserie int."].map(x=>h("th",{text:x}))));(v.pieces||[]).forEach(p=>t.append(h("tr",null,...["piece","sol","murs","plafond","menuiserie"].map(k=>h("td",{text:p[k]||""})))));sec.insertBefore(t,g)}
+    if(s.refs){const t=h("table",{class:"pt"},h("tr",null,...["Réf.","Typologie","Prix","Tél","Adresse","Origine"].map(x=>h("th",{text:x}))));
+      (v.refs||[]).forEach(id=>{const c=items.find(x=>x.id===id);if(c)t.append(h("tr",null,h("td",{text:c.ref||""}),h("td",{text:c.type||""}),h("td",{text:fmt(c.price)+priceSuf(c.tx)}),h("td",{text:c.contactTel||""}),h("td",{text:[c.address,c.district,c.city].filter(Boolean).join(", ")}),h("td",{text:refOrigin(c)})))});sec.append(h("h3",{text:"Éléments de référence"}),t)}
+    A.append(sec)});
+  A.append(h("div",{class:"psign"},h("div",null,"Signature visiteur : ",h("b",{text:v.visiteur||""})),h("div",{class:"meta",text:"Édité le "+new Date().toLocaleDateString("fr-FR")+" avec Valtera"})));
+  document.body.classList.add("printing");setTimeout(()=>{window.print();setTimeout(()=>document.body.classList.remove("printing"),400)},60)}
+$("#visPrint").onclick=()=>{if(visEditing)printVisite({...visEditing,...readVisite()})};
+$("#visCopy").onclick=e=>copyText(visText({...(visEditing||{}),...readVisite()}),e.target);
+$("#visTemoin").onclick=()=>{const v={...(visEditing||{}),...readVisite()};$("#visDlg").close();openForm();
+  const map={"Maison":"Maison","Appartement":"Appartement","Villa":"Villa","Local commercial":"Local commercial","Usine":"Usine"};const t=map[v.typo]||"Autre";
+  ensureOpt($("#f_type"),t);$("#f_type").value=t;$("#f_type").dispatchEvent(new Event("change"));
+  const set=(id,x)=>{const e=$("#"+id);if(e&&x!=null&&x!==""){e.value=x;e.dispatchEvent(new Event("input"))}};
+  set("f_sMain",v.sConst!=null?plain(v.sConst):"");set("f_sLand",v.sTerrain!=null?plain(v.sTerrain):"");set("f_price",v.valeur!=null?plain(v.valeur):"");
+  set("f_gps",v.gps);set("f_city",v.ville);set("f_district",v.quartier);set("f_address",[v.residence,v.num&&("N° "+v.num),v.rue].filter(Boolean).join(", "));
+  set("f_dossier",v.dossier);set("f_date",v.date);set("f_floor",v.etage);set("f_age",v.age!=null?plain(v.age):"");set("f_rooms",v.piecesTot!=null?plain(v.piecesTot):"");
+  ensureOpt($("#f_nature"),"Expertise");$("#f_nature").value="Expertise";set("f_source","Fiche de visite "+(v.ref||""));set("f_code",v.ref||"");
+  set("f_notes","Valeur estimée lors de la visite "+(v.ref||"")+(v.remarques?" – "+v.remarques:""));updCalc()};
 /* ===================== fichiers, photos, GPS ===================== */
 async function saveFile(name,data){
   const type=name.endsWith(".csv")?"text/csv;charset=utf-8":name.endsWith(".json")?"application/json":name.endsWith(".kml")?"application/vnd.google-earth.kml+xml":"text/html;charset=utf-8";
@@ -1081,6 +1292,8 @@ async function logout(){stopListen();online=false;ME.uid=null;ME.role=null;
   try{await fdb.terminate();await fdb.clearPersistence()}catch(e){}
   location.reload()}
 $("#mLogout").onclick=()=>{closeMenu();logout()};
+const IN_APP=(()=>{try{if(document.referrer.startsWith("android-app://"))sessionStorage.setItem("vt_app","1");return sessionStorage.getItem("vt_app")==="1"}catch(e){return false}})();
+$("#mApk").hidden=$("#gateApk").hidden=IN_APP;$("#mApk").onclick=()=>{closeMenu();location.href="download/valtera.apk"};
 async function resolveAccess(u){
   ME.uid=u.uid;ME.email=(u.email||"").toLowerCase();ME.name=u.displayName||ME.email;
   let d=null;const uref=fdb.doc("users/"+u.uid);
