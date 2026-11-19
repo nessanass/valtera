@@ -1,0 +1,38 @@
+name: Android (TWA)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build (non signé)
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease bundleRelease
+      - name: Aligner et préparer
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+          mkdir -p out
+          "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk out/valtera-unsigned-aligned.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab out/valtera-unsigned.aab
+          cp "$BT/lib/apksigner.jar" out/apksigner.jar
+          ls -la out
+      - name: Publier sur la branche android-build
+        run: |
+          cd out
+          git init -q -b android-build
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" android-build

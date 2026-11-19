@@ -1,0 +1,49 @@
+{
+  "packageId": "io.github.nessanass.valtera",
+  "host": "nessanass.github.io",
+  "name": "Valtera",
+  "launcherName": "Valtera",
+  "display": "standalone",
+  "themeColor": "#0D5C63",
+  "themeColorDark": "#0B1416",
+  "navigationColor": "#0D5C63",
+  "navigationColorDark": "#0B1416",
+  "navigationDividerColor": "#0D5C63",
+  "navigationDividerColorDark": "#0B1416",
+  "backgroundColor": "#EDF1F1",
+  "enableNotifications": false,
+  "startUrl": "/valtera/",
+  "iconUrl": "https://nessanass.github.io/valtera/icons/icon-512.png",
+  "maskableIconUrl": "https://nessanass.github.io/valtera/icons/maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "valtera"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://nessanass.github.io/valtera/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://nessanass.github.io/valtera/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "valtera",
+      "value": "13:57:E3:2E:1D:39:EA:99:8E:B4:39:41:D7:3C:D2:13:AA:4B:B6:FA:06:C4:9E:6E:7C:4E:20:7B:2E:A9:12:BA"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}
