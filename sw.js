@@ -1,6 +1,6 @@
 // Valtera : garde l'application en cache pour l'ouvrir sans réseau.
 // Les données (Firestore) ne passent jamais par ce cache : Firebase gère son propre stockage hors ligne.
-const V = "vt-v3";
+const V = "vt-v4";
 const SHELL = ["./", "index.html", "style.css", "app.js", "config.js", "manifest.webmanifest",
   "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css",
   "vendor/firebase/firebase-app-compat.js", "vendor/jspdf/jspdf.umd.min.js", "vendor/jspdf/jspdf.plugin.autotable.min.js", "vendor/firebase/firebase-auth-compat.js", "vendor/firebase/firebase-firestore-compat.js",
@@ -12,7 +12,7 @@ self.addEventListener("fetch", e => {
   const u = new URL(e.request.url);
   if (u.origin === location.origin && u.pathname.endsWith(".apk")) return;
   if (u.origin === location.origin) {
-    e.respondWith(fetch(e.request).then(r => { if (r.ok) { const cp = r.clone(); caches.open(V).then(c => c.put(e.request, cp)); } return r; })
+    e.respondWith(fetch(e.request, { cache: "no-cache" }).then(r => { if (r.ok) { const cp = r.clone(); caches.open(V).then(c => c.put(e.request, cp)); } return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
     return;
   }
