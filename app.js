@@ -1035,19 +1035,20 @@ const VIS_SECTIONS=[
    ["gps","Coordonnées","gps"],["ville","Ville"],["quartier","Quartier"],["commune","Municipalité / Commune"],["rue","Rue","text",2],["residence","Résidence"],["num","N°"],["ilot","Îlot"],["porte","Porte"],["etage","Étage"],["codePostal","Code postal"],
    ["orientation","Orientation","chips",["Nord","Sud","Est","Ouest","Nord-Est","Nord-Ouest","Sud-Est","Sud-Ouest"]]]},
  {t:"Typologie",f:[["typo","Type de bien","chips",["Maison","Appartement","Villa","Local commercial","Usine","Autre"]],["typoSub","Précision","chips",[]],["resType","Résidence","chips",["Principale","Secondaire"]]]},
- {t:"Construction",f:[["nLog","N. logements","num"],["nLc","N. locaux commerciaux","num"],["nBureaux","N. bureaux","num"],["nAsc","N. ascenseurs","num"],["nEtages","N. étages","num"],["garage","Garage"],["ssol","Sous-sol"],
+ {t:"Construction",f:[["nLog","N. logements"],["nLc","N. locaux commerciaux"],["nBureaux","N. bureaux"],["nAsc","N. ascenseurs"],["nEtages","N. étages"],["garage","Garage"],["ssol","Sous-sol"],
    ["hsp","HSP (LC et usine)","chips",["Inf","Sup"]],["terrasse","Terrasse","chips",["Accessible","Non accessible"]]]},
  {t:"Aménagements extérieurs",f:[["jardin","Jardin","chips",CH.on],["piscine","Piscine","chips",CH.on],["tsport","Terrain de sport","chips",CH.on],["cloturee","Clôturée","chips",CH.on],
    ["clim","Chauffage / clim","chips",CH.on],["chauffeEau","Chauffe-eau","chips",["Gaz","Électrique","Non"]],["incendie","Sécurité incendie","chips",["Pré-installation","Oui","Non"]]]},
  {t:"Équipement du quartier",note:"B bon · M moyen · F faible",f:[["eqCommercial","Commercial","chips",CH.bmf],["eqLoisirs","Loisirs","chips",CH.bmf],["eqScolaire","Scolaire","chips",CH.bmf],["eqSante","Santé","chips",CH.bmf],["eqSportif","Sportif","chips",CH.bmf],
    ["eqReligieux","Religieux","chips",["Suffisant","Insuffisant"]],["eqBus","Bus","chips",CH.on]]},
- {t:"Description",f:[["chambres","Nbre de chambres","num"],["sdb","Nbre de SDB / WC","num"],["piecesExt","Pièces extérieures","num"],["piecesTot","Pièces totales","num"],["sConst","Surface construite (m²)","num"],["sTerrain","Surface terrain (m²)","num"],
-   ["occupation","Usager","chips",["Propriétaire","Locataire","Inoccupé"]],["age","Âge du bien (ans)","num"],["renov","Dernière rénovation"]]},
+ {t:"Description",f:[["chambres","Nbre de chambres"],["sdb","Nbre de SDB / WC"],["piecesExt","Pièces extérieures"],["piecesTot","Pièces totales"],["sConst","Surface construite (m²)","num"],["sTerrain","Surface terrain (m²)","num"],
+   ["occupation","Usager","chips",["Propriétaire","Locataire","Inoccupé"]],["age","Âge du bien"],["renov","Dernière rénovation"]]},
  {t:"Qualité constructive",rooms:true,f:[["docs","Documents en possession lors de la visite","multi",["CP","PC","P. autorisé","Autre"]],["docsAutre","Autre document"]]},
  {t:"Valeur et références",refs:true,f:[["valeur","Valeur du bien estimée (DH)","num"]]},
  {t:"Remarques",f:[["remarques","Remarques","area",null,3]]}
 ];
 const VIS_FIELDS=VIS_SECTIONS.flatMap(s=>s.f);
+const VIS_PH={nEtages:"ex. R+3",nAsc:"ex. 2, 0 ou —",nBureaux:"ex. 4 ou —",age:"ex. 15 ans"};
 const ROOM_DEF=["Séjour","Chambres","Cuisine","SDB / WC"];
 const visCol=()=>fdb.collection("visites");
 function visRefStr(n){return "V-"+String(n).padStart(4,"0")}
@@ -1097,7 +1098,7 @@ function buildVisForm(){
       if(type==="gps"){g.append(h("label",{class:"s2"},l,h("div",{class:"gpsrow"},h("input",{id:"v_gps",inputmode:"decimal",placeholder:"33.5731, -7.5898",autocomplete:"off"}),h("button",{class:"btn sm",type:"button",id:"vGpsMe",text:"Ma position",onclick:visGpsMe}),h("button",{class:"btn sm",type:"button",id:"vGpsPick",text:"Sur la carte",onclick:()=>visPickMap()})),
         h("div",{class:"geost"},h("span",{class:"note",id:"vGeoSt"}),h("button",{type:"button",class:"linkbtn",text:"Actualiser l’adresse",onclick:()=>visGeocode(true)}))));return}
       if(type==="area"){g.append(h("label",{class:"s-all"},l,h("textarea",{id:"v_"+k,rows:span||3})));return}
-      g.append(h("label",{class:span===2?"s2":null},l,h("input",{id:"v_"+k,type:type==="num"?"text":type,inputmode:type==="num"?"decimal":null,autocomplete:"off"})))});
+      g.append(h("label",{class:span===2?"s2":null},l,h("input",{id:"v_"+k,type:type==="num"?"text":type,inputmode:type==="num"?"decimal":null,autocomplete:"off",placeholder:VIS_PH[k]||null})))});
     fs.append(g);
     if(s.rooms){fs.insertBefore(h("div",{class:"rooms"},h("div",{class:"tblwrap flat"},h("table",{class:"t",id:"vRooms"})),h("button",{class:"btn sm",type:"button",text:"+ Ajouter une pièce",onclick:()=>{addRoom({});}})),g)}
     if(s.refs){fs.append(h("div",{class:"refs"},h("div",{class:"refhead"},h("b",{text:"Éléments de référence"}),h("span",{class:"meta",id:"vRefInfo"})),
@@ -1234,7 +1235,7 @@ $("#visTemoin").onclick=()=>{const v={...(visEditing||{}),...readVisite()};$("#v
   const set=(id,x)=>{const e=$("#"+id);if(e&&x!=null&&x!==""){e.value=x;e.dispatchEvent(new Event("input"))}};
   set("f_sMain",v.sConst!=null?plain(v.sConst):"");set("f_sLand",v.sTerrain!=null?plain(v.sTerrain):"");set("f_price",v.valeur!=null?plain(v.valeur):"");
   set("f_gps",v.gps);set("f_city",v.ville);set("f_district",v.quartier);set("f_address",[v.residence,v.num&&("N° "+v.num),v.rue].filter(Boolean).join(", "));
-  set("f_dossier",v.dossier);set("f_date",v.date);set("f_floor",v.etage);set("f_age",v.age!=null?plain(v.age):"");set("f_rooms",v.piecesTot!=null?plain(v.piecesTot):"");
+  set("f_dossier",v.dossier);set("f_date",v.date);set("f_floor",v.etage);set("f_age",numIn(v.age)!=null?plain(numIn(v.age)):"");set("f_rooms",v.piecesTot!=null?String(v.piecesTot):"");
   ensureOpt($("#f_nature"),"Expertise");$("#f_nature").value="Expertise";set("f_source","Fiche de visite "+(v.ref||""));set("f_code",v.ref||"");
   set("f_notes","Valeur estimée lors de la visite "+(v.ref||"")+(v.remarques?" – "+v.remarques:""));updCalc()};
 /* ===================== adresse automatique à partir des coordonnées (OpenStreetMap) ===================== */
@@ -1344,20 +1345,22 @@ let pdfLibs=null;
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=()=>rej({code:"pdf-lib"});document.head.append(s)})}
 function ensurePdf(){if(window.jspdf?.jsPDF?.API?.autoTable)return Promise.resolve();
   return pdfLibs||(pdfLibs=loadScript("vendor/jspdf/jspdf.umd.min.js").then(()=>loadScript("vendor/jspdf/jspdf.plugin.autotable.min.js")).catch(e=>{pdfLibs=null;throw e}))}
-const pt=v=>String(v??"").replace(/²/g,"2").replace(/[’‘]/g,"'").replace(/[“”«»]/g,'"').replace(/[–—]/g,"-").replace(/ | /g," ");
+const pt=v=>String(v??"").replace(/²/g,"2").replace(/[’‘]/g,"'").replace(/[“”«»]/g,'"').replace(/ | /g," ");
 async function visitePdf(v){
   await ensurePdf();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"a4"});
   const M=10,W=210-2*M,teal=[13,92,99],line=[150,160,165];
   const X=(cond)=>cond?"X":"";const val=x=>x==null||x===""?"":typeof x==="number"?pt(plain(x)):pt(x);
-  const base={theme:"grid",margin:{left:M,right:M},tableWidth:W,styles:{font:"helvetica",fontSize:8.2,cellPadding:1.05,lineColor:line,lineWidth:.2,textColor:[20,30,35],valign:"middle",overflow:"linebreak"},
-    headStyles:{fillColor:[234,241,241],textColor:[20,30,35],fontStyle:"bold",halign:"center"},bodyStyles:{minCellHeight:4.9}};
+  const base={theme:"grid",margin:{left:M,right:M},tableWidth:W,styles:{font:"helvetica",fontSize:8,cellPadding:1,lineColor:line,lineWidth:.2,textColor:[20,30,35],valign:"middle",overflow:"linebreak"},
+    headStyles:{fillColor:[234,241,241],textColor:[20,30,35],fontStyle:"bold",halign:"center"},bodyStyles:{minCellHeight:4.6}};
   let y=M;
-  const title=t=>{y+=3.7;doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(20,30,35);doc.text(t,M,y);y+=1.2};
-  const tbl=o=>{doc.autoTable({...base,startY:y,...o,styles:{...base.styles,...(o.styles||{})}});y=doc.lastAutoTable.finalY};
-  const c=(t,o)=>({content:pt(t),...(o||{})}),b=t=>c(t,{styles:{fontStyle:"bold"}}),xc=t=>c(t,{styles:{halign:"center",fontStyle:"bold",textColor:teal}});
+  const title=t=>{y+=3.4;doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(20,30,35);doc.text(t,M,y);y+=1.2};
+  const check=d=>{if(d.section!=="body"||!d.cell.raw||!d.cell.raw._check)return;const cx=d.cell.x+d.cell.width/2,cy=d.cell.y+d.cell.height/2,s=Math.min(1.25,d.cell.height/5.2);
+    doc.setDrawColor(...teal);doc.setLineWidth(.55);doc.setLineCap("round");doc.setLineJoin("round");doc.lines([[1.25*s,1.35*s],[2.35*s,-2.9*s]],cx-1.75*s,cy+.05*s,[1,1],"S",false);doc.setLineWidth(.2)};
+  const tbl=o=>{const own=o.didDrawCell;doc.autoTable({...base,startY:y,...o,styles:{...base.styles,...(o.styles||{})},didDrawCell:d=>{check(d);if(own)own(d)}});y=doc.lastAutoTable.finalY};
+  const c=(t,o)=>({content:pt(t),...(o||{})}),b=t=>c(t,{styles:{fontStyle:"bold"}}),xc=t=>t==="X"?{content:"",_check:true}:c(t,{styles:{halign:"center",fontStyle:"bold",textColor:teal}});
   // en-tête
   doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(20,30,35);doc.text("Fiche De Visite :",105,y+6,{align:"center"});
-  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90,100,105);doc.text(pt("Valtera · "+(v.ref||"")),210-M,y+6,{align:"right"});y+=10;
+  y+=10;
   const dateFr=v.date?new Date(v.date+"T12:00:00").toLocaleDateString("fr-FR"):"";
   tbl({body:[
     [b("Numéro du dossier"),c(val(v.dossier)),b("Ville :"),c(val(v.ville)),b("Rue :"),c(val(v.rue))],
@@ -1367,7 +1370,7 @@ async function visitePdf(v){
     ["","",b("Etage :"),c(val(v.etage)),b("Municipalité/Commune :"),c(val(v.commune))],
     ["","",b("Orientation :"),c(val(v.orientation)),"",""],
     ["","",b("Coordonnées :"),c(val(v.gps)),"",""]],
-    columnStyles:{0:{cellWidth:29},1:{cellWidth:32},2:{cellWidth:25},3:{cellWidth:38},4:{cellWidth:38}}});
+    columnStyles:{0:{cellWidth:28},1:{cellWidth:30},2:{cellWidth:23},3:{cellWidth:38},4:{cellWidth:35}}});
   // typologie
   title("Typologie :");const ty=v.typo,sub=v.typoSub;
   const grp=(name,subs)=>subs.map((s,i)=>X(ty===name&&(sub===s||(!sub&&i===0))));
@@ -1414,17 +1417,14 @@ async function visitePdf(v){
   tbl({head:[[c("Typologie"),c("Tél"),c("Adresse"),c("Particulier"),c("Ag. immob")]],body:rb,columnStyles:{0:{cellWidth:58},1:{cellWidth:27},3:{cellWidth:19},4:{cellWidth:19}}});
   // remarques + signature
   const sig=await getSignature(v.createdBy||ME.uid);
-  if(y>255){doc.addPage();y=M}
+  if(y>287-31){doc.addPage();y=M}
   y+=2.5;const sigCellW=62;
   tbl({head:[[c("Remarques :",{styles:{halign:"left"}}),c("Signature visiteur :",{styles:{halign:"left"}})]],body:[[c(val(v.remarques)),c(sig?"":pt(v.visiteur||""),{styles:{minCellHeight:22,valign:"bottom",fontSize:7.5,textColor:[90,100,105]}})]],
     columnStyles:{1:{cellWidth:sigCellW}},bodyStyles:{minCellHeight:22,valign:"top"},
     didDrawCell:d=>{if(d.section==="body"&&d.column.index===1&&sig){try{const p=doc.getImageProperties(sig),r=Math.min((d.cell.width-6)/p.width,(d.cell.height-9)/p.height),w=p.width*r,hh=p.height*r;
       doc.addImage(sig,"PNG",d.cell.x+(d.cell.width-w)/2,d.cell.y+2,w,hh);doc.setFontSize(7.5);doc.setTextColor(90,100,105);doc.text(pt(v.visiteur||""),d.cell.x+d.cell.width/2,d.cell.y+d.cell.height-2,{align:"center"})}catch(e){}}}});
-  // pied de page
-  const pages=doc.getNumberOfPages();for(let i=1;i<=pages;i++){doc.setPage(i);doc.setFontSize(7);doc.setTextColor(120,130,135);
-    doc.text(pt("Fiche "+(v.ref||"")+(v.dossier?" · dossier "+v.dossier:"")+" · éditée le "+new Date().toLocaleDateString("fr-FR")+" avec Valtera"),M,290);doc.text(i+" / "+pages,210-M,290,{align:"right"})}
   return doc}
-function visPdfName(v){return ("Fiche_de_visite_"+[v.ref,v.dossier].filter(Boolean).join("_")).replace(/[^\w\-]+/g,"_")+".pdf"}
+function visPdfName(v){return ("Fiche_de_visite_"+(v.dossier||v.date||new Date().toISOString().slice(0,10))).replace(/[^\w\-]+/g,"_")+".pdf"}
 async function downloadVisitePdf(v,btn){const lbl=btn?.textContent;if(btn){btn.disabled=true;btn.textContent="Préparation…"}
   try{const doc=await visitePdf(v);const blob=doc.output("blob"),name=visPdfName(v);
     const file=new File([blob],name,{type:"application/pdf"});

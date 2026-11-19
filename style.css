@@ -280,6 +280,7 @@ img{max-width:100%}
 .fchips .lbl{font-size:13px;font-weight:500;color:var(--muted)}
 .fchips .chips button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 13px;font:500 14px var(--f-body);cursor:pointer;min-height:36px}
 .fchips .chips button[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.fchips .chips button[aria-pressed="true"]::before{content:"✓ ";font-weight:700}
 .gpsrow{display:flex;gap:8px;align-items:center}
 .gpsrow input{flex:1;min-width:0}
 .gpsrow{flex-wrap:wrap}
