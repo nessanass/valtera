@@ -282,6 +282,9 @@ img{max-width:100%}
 .fchips .chips button[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
 .gpsrow{display:flex;gap:8px;align-items:center}
 .gpsrow input{flex:1;min-width:0}
+.gpsrow{flex-wrap:wrap}
+.geost{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-top:4px;font-weight:400}
+.geost .note:empty{display:none}
 .rooms{display:flex;flex-direction:column;gap:8px;align-items:flex-start;margin-bottom:12px;max-width:100%}
 .rooms .tblwrap{width:100%}
 #vRooms input{width:100%;min-width:110px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;background:var(--surface);color:var(--ink)}

@@ -1094,7 +1094,8 @@ function buildVisForm(){
     const g=h("div",{class:"fgrid"});
     s.f.forEach(([k,l,type="text",opts,span])=>{
       if(type==="chips"||type==="multi"){g.append(h("div",{class:"fchips s-all"},h("span",{class:"lbl",text:l}),chipsEl(k,opts||[],type==="multi")));return}
-      if(type==="gps"){g.append(h("label",{class:"s2"},l,h("div",{class:"gpsrow"},h("input",{id:"v_gps",inputmode:"decimal",placeholder:"33.5731, -7.5898",autocomplete:"off"}),h("button",{class:"btn sm",type:"button",id:"vGpsMe",text:"Ma position",onclick:visGpsMe}),h("button",{class:"btn sm",type:"button",id:"vGpsPick",text:"Sur la carte",onclick:()=>visPickMap()}))));return}
+      if(type==="gps"){g.append(h("label",{class:"s2"},l,h("div",{class:"gpsrow"},h("input",{id:"v_gps",inputmode:"decimal",placeholder:"33.5731, -7.5898",autocomplete:"off"}),h("button",{class:"btn sm",type:"button",id:"vGpsMe",text:"Ma position",onclick:visGpsMe}),h("button",{class:"btn sm",type:"button",id:"vGpsPick",text:"Sur la carte",onclick:()=>visPickMap()})),
+        h("div",{class:"geost"},h("span",{class:"note",id:"vGeoSt"}),h("button",{type:"button",class:"linkbtn",text:"Actualiser l’adresse",onclick:()=>visGeocode(true)}))));return}
       if(type==="area"){g.append(h("label",{class:"s-all"},l,h("textarea",{id:"v_"+k,rows:span||3})));return}
       g.append(h("label",{class:span===2?"s2":null},l,h("input",{id:"v_"+k,type:type==="num"?"text":type,inputmode:type==="num"?"decimal":null,autocomplete:"off"})))});
     fs.append(g);
@@ -1156,8 +1157,8 @@ async function visGpsMe(silent){const b=$("#vGpsMe");if(!b)return;b.disabled=tru
 function nearest(g,maxM){return items.map(c=>({c,g:gpsOf(c)})).filter(x=>x.g).map(x=>({c:x.c,d:distM(g,x.g)})).filter(x=>x.d<=maxM).sort((a,b)=>a.d-b.d)}
 function autoPlace(){const g=coordsFrom($("#v_gps").value);if(!g)return;const n=nearest(g,900);
   const pick=k=>{const cnt={};n.slice(0,15).forEach(x=>{const v=(x.c[k]||"").trim();if(v)cnt[v]=(cnt[v]||0)+1});return Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]?.[0]||""};
-  if(!$("#v_ville").value){const v=pick("city");if(v)$("#v_ville").value=v}
-  if(!$("#v_quartier").value){const v=pick("district");if(v)$("#v_quartier").value=v}}
+  const put=(k,v)=>{const e=$("#v_"+k);if(v&&(!e.value.trim()||e.dataset.auto==="1")){e.value=v;e.dataset.auto="1"}};
+  put("ville",pick("city"));put("quartier",pick("district"));visGeocode()}
 $("#visBody").addEventListener("change",e=>{if(e.target.id==="v_gps")autoPlace()});
 
 /* ---------- éléments de référence (témoins) ---------- */
@@ -1236,6 +1237,59 @@ $("#visTemoin").onclick=()=>{const v={...(visEditing||{}),...readVisite()};$("#v
   set("f_dossier",v.dossier);set("f_date",v.date);set("f_floor",v.etage);set("f_age",v.age!=null?plain(v.age):"");set("f_rooms",v.piecesTot!=null?plain(v.piecesTot):"");
   ensureOpt($("#f_nature"),"Expertise");$("#f_nature").value="Expertise";set("f_source","Fiche de visite "+(v.ref||""));set("f_code",v.ref||"");
   set("f_notes","Valeur estimée lors de la visite "+(v.ref||"")+(v.remarques?" – "+v.remarques:""));updCalc()};
+/* ===================== adresse automatique à partir des coordonnées (OpenStreetMap) ===================== */
+const GEO_CACHE={};
+const HW_RE=/^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|road)(_link)?$/;
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+/* garde la partie en lettres latines quand un nom mélange arabe et français */
+function latinName(s){s=String(s||"").trim();if(!/[؀-ۿ]/.test(s))return s;
+  const lat=s.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]+/g," ").replace(/\s*[-–\/|,()]\s*(?=[-–\/|,()\s]*$)/g,"").replace(/^[\s\-–\/|,()]+|[\s\-–\/|,()]+$/g,"").replace(/\s{2,}/g," ").trim();
+  return /[A-Za-zÀ-ÿ]{3}/.test(lat)?lat:s}
+function toXY(lat,lng,lat0){const k=111320;return [lng*k*Math.cos(lat0*Math.PI/180),lat*k]}
+function distSeg(p,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;let t=l?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)}
+async function fetchJson(url,opt,ms=12000){const c=new AbortController(),tm=setTimeout(()=>c.abort(),ms);
+  try{const r=await fetch(url,{...(opt||{}),signal:c.signal});if(!r.ok)throw {code:"http"+r.status};return await r.json()}finally{clearTimeout(tm)}}
+async function nearStreets(lat,lng){
+  const q="[out:json][timeout:12];way(around:45,"+lat+","+lng+")[highway][name];out tags geom;";let j=null;
+  for(const u of OVERPASS){try{j=await fetchJson(u,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});break}catch(e){}}
+  if(!j)return null;const p=toXY(lat,lng,lat),best={};
+  (j.elements||[]).forEach(w=>{const t=w.tags||{};if(!HW_RE.test(t.highway||"")||!w.geometry||!w.geometry.length)return;
+    const n=latinName(t["name:fr"]||t.name);if(!n)return;const pts=w.geometry.map(g=>toXY(g.lat,g.lon,lat));
+    let d=pts.length===1?Math.hypot(p[0]-pts[0][0],p[1]-pts[0][1]):Infinity;for(let i=1;i<pts.length;i++)d=Math.min(d,distSeg(p,pts[i-1],pts[i]));
+    const k=n.toLowerCase();if(!best[k]||d<best[k].d)best[k]={n,d}});
+  return Object.values(best).sort((a,b)=>a.d-b.d)}
+async function reverseAddr(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(GEO_CACHE[key])return GEO_CACHE[key];
+  const [nom,streets]=await Promise.all([
+    fetchJson("https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=fr&lat="+lat+"&lon="+lng).catch(()=>null),
+    nearStreets(lat,lng).catch(()=>null)]);
+  if(!nom&&!streets)throw {code:"geo"};
+  const a=nom?.address||{};let rue="",angle=false;
+  if(streets&&streets.length){const [s1,s2]=streets;if(s2&&s1.d<=40&&s2.d<=30){rue="Angle "+s1.n+" et "+s2.n;angle=true}else if(s1.d<=45)rue=s1.n}
+  if(!rue)rue=latinName(a.road||a.pedestrian||"");
+  const ville=latinName(a.city||a.town||a.village||"");
+  const res={rue,angle,num:a.house_number||"",quartier:latinName(a.neighbourhood||a.suburb||a.quarter||a.city_district||""),ville,
+    commune:latinName(a.city_district||a.municipality||ville),codePostal:a.postcode||""};
+  GEO_CACHE[key]=res;return res}
+
+/* fiche de visite : remplit les champs vides ou déjà remplis automatiquement (jamais ce que tu as tapé toi-même) */
+let geoSeq=0;
+async function visGeocode(force){const g=coordsFrom($("#v_gps")?.value||"");const st=$("#vGeoSt");if(!g||!st)return;const seq=++geoSeq;
+  if(!navigator.onLine){st.textContent="Hors ligne : l’adresse se complète à la main (ville et quartier proposés d’après les témoins proches).";return}
+  st.textContent="Recherche de l’adresse…";
+  try{const r=await reverseAddr(g[0],g[1]);if(seq!==geoSeq||!$("#visDlg").open)return;
+    const put=(k,v)=>{const e=$("#v_"+k);if(!e||!v)return;if(force||!e.value.trim()||e.dataset.auto==="1"){e.value=v;e.dataset.auto="1"}};
+    put("rue",r.rue);put("num",r.num);put("quartier",r.quartier);put("ville",r.ville);put("commune",r.commune);put("codePostal",r.codePostal);
+    st.textContent=r.rue?(r.angle?"Angle trouvé":"Rue trouvée")+" sur OpenStreetMap : "+r.rue+". Vérifie sur place.":"Adresse partielle trouvée sur OpenStreetMap : complète la rue."}
+  catch(e){if(seq===geoSeq)st.textContent="Adresse introuvable pour ce point : complète à la main."}}
+$("#visBody").addEventListener("input",e=>{if(e.target.dataset&&e.target.dataset.auto)delete e.target.dataset.auto});
+
+/* fiche témoin : complète l'adresse, le quartier et la ville s'ils sont vides */
+async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!navigator.onLine)return;
+  try{const r=await reverseAddr(g[0],g[1]);if(!$("#dlg").open)return;let n=0;
+    const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.dispatchEvent(new Event("input"));n++}};
+    put("#f_address",r.rue);put("#f_district",r.quartier);
+    if(r.ville&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),r.ville);$("#f_city").value=r.ville;$("#f_city").dispatchEvent(new Event("change"));n++}
+    if(n)toast("Adresse complétée depuis OpenStreetMap"+(r.rue?" : "+r.rue:""))}catch(e){}}
 /* ===================== signature du visiteur ===================== */
 const SIG={};
 async function getSignature(uid){uid=uid||ME.uid;if(!uid)return null;if(SIG[uid]!==undefined)return SIG[uid];
@@ -1397,7 +1451,7 @@ $("#pickMe").onclick=async()=>{const b=$("#pickMe");b.disabled=true;try{const [l
 $("#pickGo").addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();const g=coordsFrom(e.target.value);if(g)pickMap.setView(g,18);else toast("Coordonnées illisibles : écris « latitude, longitude ».")});
 $("#pickGo").addEventListener("paste",()=>setTimeout(()=>{const g=coordsFrom($("#pickGo").value);if(g)pickMap.setView(g,18)},0));
 /* bouton « Sur la carte » de la fiche témoin */
-$("#gpsPick").onclick=async()=>{const g=await pickOnMap($("#f_gps").value);if(g){$("#f_gps").value=gpsStr(g);$("#f_gps").dispatchEvent(new Event("input"));toast("Point enregistré")}};
+$("#gpsPick").onclick=async()=>{const g=await pickOnMap($("#f_gps").value);if(g){$("#f_gps").value=gpsStr(g);$("#f_gps").dispatchEvent(new Event("input"));toast("Point enregistré");temGeocode()}};
 async function visPickMap(){const g=await pickOnMap($("#v_gps").value);if(g){$("#v_gps").value=gpsStr(g);autoPlace();toast("Point enregistré")}}
 /* ===================== fichiers, photos, GPS ===================== */
 async function saveFile(name,data){
@@ -1419,7 +1473,7 @@ async function addPhotos(e){
 $("#photoInput").onchange=addPhotos;$("#camInput").onchange=addPhotos;
 $("#camBtn").onclick=()=>$("#camInput").click();
 $("#gpsMe").onclick=async()=>{const b=$("#gpsMe");b.disabled=true;b.textContent="Recherche…";
-  try{const [la,lo,acc]=await getPos();$("#f_gps").value=gpsStr([+la.toFixed(6),+lo.toFixed(6)]);$("#f_gps").dispatchEvent(new Event("input"));toast("Position enregistrée (± "+Math.round(acc||0)+" m)")}catch(e){geoErr(e)}
+  try{const [la,lo,acc]=await getPos();$("#f_gps").value=gpsStr([+la.toFixed(6),+lo.toFixed(6)]);$("#f_gps").dispatchEvent(new Event("input"));toast("Position enregistrée (± "+Math.round(acc||0)+" m)");temGeocode()}catch(e){geoErr(e)}
   b.disabled=false;b.textContent="Ma position"};
 $("#nearMe").onclick=async()=>{const b=$("#nearMe");b.disabled=true;
   try{const [la,lo]=await getPos();$("#near").value=gpsStr([+la.toFixed(6),+lo.toFixed(6)]);shown=0;mv=null;render()}catch(e){geoErr(e)}b.disabled=false};
