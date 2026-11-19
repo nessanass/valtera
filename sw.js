@@ -1,9 +1,9 @@
 // Valtera : garde l'application en cache pour l'ouvrir sans réseau.
 // Les données (Firestore) ne passent jamais par ce cache : Firebase gère son propre stockage hors ligne.
-const V = "vt-v2";
+const V = "vt-v3";
 const SHELL = ["./", "index.html", "style.css", "app.js", "config.js", "manifest.webmanifest",
   "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css",
-  "vendor/firebase/firebase-app-compat.js", "vendor/firebase/firebase-auth-compat.js", "vendor/firebase/firebase-firestore-compat.js",
+  "vendor/firebase/firebase-app-compat.js", "vendor/jspdf/jspdf.umd.min.js", "vendor/jspdf/jspdf.plugin.autotable.min.js", "vendor/firebase/firebase-auth-compat.js", "vendor/firebase/firebase-firestore-compat.js",
   "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
