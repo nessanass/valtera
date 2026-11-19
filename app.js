@@ -1240,47 +1240,50 @@ $("#visTemoin").onclick=()=>{const v={...(visEditing||{}),...readVisite()};$("#v
 /* ===================== adresse automatique à partir des coordonnées (OpenStreetMap) ===================== */
 const GEO_CACHE={};
 const HW_RE=/^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|road)(_link)?$/;
-const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+const OVERPASS=["https://overpass.private.coffee/api/interpreter","https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
 /* garde la partie en lettres latines quand un nom mélange arabe et français */
 function latinName(s){s=String(s||"").trim();if(!/[؀-ۿ]/.test(s))return s;
-  const lat=s.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]+/g," ").replace(/\s*[-–\/|,()]\s*(?=[-–\/|,()\s]*$)/g,"").replace(/^[\s\-–\/|,()]+|[\s\-–\/|,()]+$/g,"").replace(/\s{2,}/g," ").trim();
+  const lat=s.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]+/g," ").replace(/^[\s\-–\/|,()]+|[\s\-–\/|,()]+$/g,"").replace(/\s*[\-–\/|]\s*$/,"").replace(/\s{2,}/g," ").trim();
   return /[A-Za-zÀ-ÿ]{3}/.test(lat)?lat:s}
 function toXY(lat,lng,lat0){const k=111320;return [lng*k*Math.cos(lat0*Math.PI/180),lat*k]}
 function distSeg(p,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;let t=l?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)}
 async function fetchJson(url,opt,ms=12000){const c=new AbortController(),tm=setTimeout(()=>c.abort(),ms);
   try{const r=await fetch(url,{...(opt||{}),signal:c.signal});if(!r.ok)throw {code:"http"+r.status};return await r.json()}finally{clearTimeout(tm)}}
-async function nearStreets(lat,lng){
-  const q="[out:json][timeout:12];way(around:45,"+lat+","+lng+")[highway][name];out tags geom;";let j=null;
-  for(const u of OVERPASS){try{j=await fetchJson(u,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});break}catch(e){}}
-  if(!j)return null;const p=toXY(lat,lng,lat),best={};
-  (j.elements||[]).forEach(w=>{const t=w.tags||{};if(!HW_RE.test(t.highway||"")||!w.geometry||!w.geometry.length)return;
+const STREET_CACHE={},NOM_CACHE={};
+async function nearStreets(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(STREET_CACHE[key])return STREET_CACHE[key];
+  const q="[out:json][timeout:12];way(around:45,"+lat+","+lng+")[highway][name];out tags geom;";
+  const j=await Promise.any(OVERPASS.map(u=>fetchJson(u+"?data="+encodeURIComponent(q),null,16000).then(x=>{if(!x||!Array.isArray(x.elements))throw 0;return x})));
+  const p=toXY(lat,lng,lat),best={};
+  j.elements.forEach(w=>{const t=w.tags||{};if(!HW_RE.test(t.highway||"")||!w.geometry||!w.geometry.length)return;
     const n=latinName(t["name:fr"]||t.name);if(!n)return;const pts=w.geometry.map(g=>toXY(g.lat,g.lon,lat));
     let d=pts.length===1?Math.hypot(p[0]-pts[0][0],p[1]-pts[0][1]):Infinity;for(let i=1;i<pts.length;i++)d=Math.min(d,distSeg(p,pts[i-1],pts[i]));
     const k=n.toLowerCase();if(!best[k]||d<best[k].d)best[k]={n,d}});
-  return Object.values(best).sort((a,b)=>a.d-b.d)}
-async function reverseAddr(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(GEO_CACHE[key])return GEO_CACHE[key];
-  const [nom,streets]=await Promise.all([
-    fetchJson("https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=fr&lat="+lat+"&lon="+lng).catch(()=>null),
-    nearStreets(lat,lng).catch(()=>null)]);
-  if(!nom&&!streets)throw {code:"geo"};
-  const a=nom?.address||{};let rue="",angle=false;
-  if(streets&&streets.length){const [s1,s2]=streets;if(s2&&s1.d<=40&&s2.d<=30){rue="Angle "+s1.n+" et "+s2.n;angle=true}else if(s1.d<=45)rue=s1.n}
-  if(!rue)rue=latinName(a.road||a.pedestrian||"");
-  const ville=latinName(a.city||a.town||a.village||"");
-  const res={rue,angle,num:a.house_number||"",quartier:latinName(a.neighbourhood||a.suburb||a.quarter||a.city_district||""),ville,
-    commune:latinName(a.city_district||a.municipality||ville),codePostal:a.postcode||""};
-  GEO_CACHE[key]=res;return res}
+  return STREET_CACHE[key]=Object.values(best).sort((a,b)=>a.d-b.d)}
+function streetLine(streets){if(!streets||!streets.length)return null;const [s1,s2]=streets;
+  if(s2&&s1.d<=40&&s2.d<=30)return {rue:"Angle "+s1.n+" et "+s2.n,angle:true};if(s1.d<=45)return {rue:s1.n,angle:false};return null}
+const ADMIN_RE=/^(arrondissement|préfecture|prefecture|pachalik|commune|province|cercle|caïdat|caidat)\b/i;
+async function nomAddr(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(NOM_CACHE[key])return NOM_CACHE[key];
+  const n=await fetchJson("https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=fr&lat="+lat+"&lon="+lng,null,12000);
+  const a=n?.address||{};const ville=latinName(a.city||a.town||a.village||"");
+  const quartier=latinName([a.quarter,a.neighbourhood,a.suburb,a.city_district].find(x=>x&&!ADMIN_RE.test(x))||"");
+  const commune=latinName([a.suburb,a.city_district,a.municipality,a.county].find(x=>x&&/^(arrondissement|commune)\b/i.test(x))||a.municipality||ville);
+  return NOM_CACHE[key]={rue:latinName(a.road||a.pedestrian||""),num:a.house_number||"",quartier,ville,commune,codePostal:a.postcode||""}}
+async function reverseAddr(lat,lng){const [nom,st]=await Promise.all([nomAddr(lat,lng).catch(()=>null),nearStreets(lat,lng).catch(()=>null)]);
+  if(!nom&&!st)throw {code:"geo"};const sl=streetLine(st);return {...(nom||{}),rue:sl?.rue||nom?.rue||"",angle:!!sl?.angle}}
 
 /* fiche de visite : remplit les champs vides ou déjà remplis automatiquement (jamais ce que tu as tapé toi-même) */
 let geoSeq=0;
 async function visGeocode(force){const g=coordsFrom($("#v_gps")?.value||"");const st=$("#vGeoSt");if(!g||!st)return;const seq=++geoSeq;
   if(!navigator.onLine){st.textContent="Hors ligne : l’adresse se complète à la main (ville et quartier proposés d’après les témoins proches).";return}
   st.textContent="Recherche de l’adresse…";
-  try{const r=await reverseAddr(g[0],g[1]);if(seq!==geoSeq||!$("#visDlg").open)return;
-    const put=(k,v)=>{const e=$("#v_"+k);if(!e||!v)return;if(force||!e.value.trim()||e.dataset.auto==="1"){e.value=v;e.dataset.auto="1"}};
-    put("rue",r.rue);put("num",r.num);put("quartier",r.quartier);put("ville",r.ville);put("commune",r.commune);put("codePostal",r.codePostal);
-    st.textContent=r.rue?(r.angle?"Angle trouvé":"Rue trouvée")+" sur OpenStreetMap : "+r.rue+". Vérifie sur place.":"Adresse partielle trouvée sur OpenStreetMap : complète la rue."}
-  catch(e){if(seq===geoSeq)st.textContent="Adresse introuvable pour ce point : complète à la main."}}
+  const live=()=>seq===geoSeq&&$("#visDlg").open;
+  const put=(k,v)=>{const e=$("#v_"+k);if(!e||!v)return;if(force||!e.value.trim()||e.dataset.auto==="1"){e.value=v;e.dataset.auto="1"}};
+  let nom=null,sl=null,done=0;
+  const msg=()=>{if(!live())return;const rue=$("#v_rue").value;
+    st.textContent=sl?.angle?"Angle trouvé sur OpenStreetMap : "+sl.rue+". Vérifie sur place.":done<2?"Adresse trouvée"+(rue?" : "+rue:"")+". Recherche d’un angle de rues…":rue?"Rue trouvée sur OpenStreetMap : "+rue+". Vérifie sur place.":nom||sl?"Adresse partielle trouvée sur OpenStreetMap : complète la rue.":"Adresse introuvable pour ce point : complète à la main."};
+  const pN=nomAddr(g[0],g[1]).then(r=>{nom=r;if(!live())return;if(!sl)put("rue",r.rue);put("num",r.num);put("quartier",r.quartier);put("ville",r.ville);put("commune",r.commune);put("codePostal",r.codePostal)}).catch(()=>{}).finally(()=>{done++;msg()});
+  const pS=nearStreets(g[0],g[1]).then(r=>{sl=streetLine(r);if(live()&&sl)put("rue",sl.rue)}).catch(()=>{}).finally(()=>{done++;msg()});
+  await Promise.all([pN,pS])}
 $("#visBody").addEventListener("input",e=>{if(e.target.dataset&&e.target.dataset.auto)delete e.target.dataset.auto});
 
 /* fiche témoin : complète l'adresse, le quartier et la ville s'ils sont vides */
