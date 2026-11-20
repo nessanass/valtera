@@ -1457,12 +1457,16 @@ async function visGeocode(force){const g=coordsFrom($("#v_gps")?.value||"");cons
 $("#visBody").addEventListener("input",e=>{if(e.target.dataset&&e.target.dataset.auto)delete e.target.dataset.auto});
 
 /* fiche témoin : complète l'adresse, le quartier et la ville s'ils sont vides */
-async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!navigator.onLine)return;
-  try{const r=await reverseAddr(g[0],g[1]);if(!$("#dlg").open)return;let n=0;
-    const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.dispatchEvent(new Event("input"));n++}};
-    put("#f_address",r.rue);put("#f_district",r.quartier);
-    if(r.ville&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),r.ville);$("#f_city").value=r.ville;$("#f_city").dispatchEvent(new Event("change"));n++}
-    if(n)toast("Adresse complétée depuis OpenStreetMap"+(r.rue?" : "+r.rue:""))}catch(e){}}
+/* témoin : ville, quartier et rue depuis les coordonnées, en deux temps (OpenStreetMap d'abord, les rues d'angle ensuite) ; ne remplace jamais ce qui est déjà écrit */
+let temSeq=0;
+async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!navigator.onLine)return;const seq=++temSeq;
+  const live=()=>seq===temSeq&&$("#dlg").open&&String(coordsFrom($("#f_gps").value))===String(g);let n=0,rue="";
+  const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.dispatchEvent(new Event("input"));n++}};
+  const city=v=>{if(v&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),v);$("#f_city").value=v;$("#f_city").dispatchEvent(new Event("change"));n++}};
+  try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
+  if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
+  try{const sl=streetLine(await nearStreets(g[0],g[1]));if(!live()||!sl?.rue)return;const a=$("#f_address");
+    if(!a.value.trim()||(rue&&a.value===rue&&sl.angle)){a.value=sl.rue;a.dispatchEvent(new Event("input"));toast("Adresse : "+sl.rue)}}catch(e){}}
 /* ===================== signature du visiteur ===================== */
 const SIG={};
 async function getSignature(uid){uid=uid||ME.uid;if(!uid)return null;if(SIG[uid]!==undefined)return SIG[uid];
