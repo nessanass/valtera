@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261120154001"></script>
+<script src="boot.js?v=20261120155530"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261120154001">
+<link rel="stylesheet" href="style.css?v=20261120155530">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -221,7 +221,7 @@
       <legend>Surfaces</legend>
       <div class="fgrid">
         <label>Principale <span class="u">(RDC / habitable, m²)</span><input id="f_sMain" inputmode="decimal"></label>
-        <label>Mezzanine <span class="u">(m²)</span><input id="f_sMezz" inputmode="decimal"></label>
+        <label>Mezzanine / soupente <span class="u">(m²)</span><input id="f_sMezz" inputmode="decimal"></label>
         <label>Cave / sous-sol <span class="u">(m²)</span><input id="f_sCave" inputmode="decimal"></label>
         <label>Terrasse <span class="u">(m²)</span><input id="f_sTerr" inputmode="decimal"></label>
         <label>Terrain <span class="u">(m²)</span><input id="f_sLand" inputmode="decimal"></label>
@@ -354,7 +354,7 @@
     <fieldset>
       <legend>Coefficients de pondération des surfaces</legend>
       <div class="fgrid">
-        <label>Mezzanine<input id="s_cm" inputmode="decimal"></label>
+        <label>Mezzanine / soupente<input id="s_cm" inputmode="decimal"></label>
         <label>Cave / sous-sol<input id="s_cc" inputmode="decimal"></label>
         <label>Terrasse<input id="s_ct" inputmode="decimal"></label>
       </div>
@@ -426,7 +426,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261120154001"></script>
-<script src="app.js?v=20261120154001"></script>
+<script src="config.js?v=20261120155530"></script>
+<script src="app.js?v=20261120155530"></script>
 </body>
 </html>

@@ -527,6 +527,7 @@ function smartParse(raw){
   t=t.replace(/(\d+°\d+'[\d.]+"[ns])\s*(\d+°\d+'[\d.]+"[ew])/g," ").replace(/-?\d{1,2}[.,]\d{4,}\s*[, ]\s*-?\d{1,2}[.,]\d{4,}/g," ").replace(/(?:\+212\s?|\b0)[5-8](?:[\s.-]?\d){8}\b/g," ").replace(/\s+/g," ");
   t=t.replace(/(\d+(?:[.,]\d+)?)\s*(?:k|mille|alf|ألف|الف|آلاف)(?![a-zà-ÿء-ي])/g,(x,n)=>" "+Math.round(toNum(n)*1000)+" ")
     .replace(/rez[- ]?de[- ]?chauss[ée]+e?s?|\br\.d\.c\b\.?|الطابق الأرضي|(?:أ|ا)رضي(?![ء-ي])/g," rdc ")
+    .replace(/\b(?:sous?[- ]?|sur-?|su)p[ae]nte?s?\b|(?:ال)?(?:سو|صو)ب(?:و|ا)نت/g," mezz ")
     .replace(/sous[- ]?sols?|\bs\s*\/\s*sol\b|\bs-sol\b|\bss[- ]sol\b|\bssol\b|الطابق السفلي|تحت (?:أ|ا)رضي|تحت الأرض|قبو/g," soussol ")
     .replace(/(?:ال)?ميزانين|ميزانيل|(?:ال)?سدة/g," mezz ")
     .replace(/\s+/g," ");
@@ -631,7 +632,7 @@ Règles :
 - "mellion", "mlyon", "مليون" = millions de centimes : 56 mellion = 560 000 DH. "1,2 MDH" = 1 200 000 DH.
 - "sarout", "pas-de-porte", "hlaouane", "ساروت" : opération "Pas-de-porte" ; le loyer mensuel éventuel va dans "loyer".
 - "à louer", "loué", "par mois", "كراء" : opération "Location" ; "price" = loyer mensuel ; l'avance ou la caution va dans "avance".
-- Sépare les surfaces : sMain = principale (RDC, habitable, construite), sMezz = mezzanine, sCave = cave ou sous-sol, sTerr = terrasse, sLand = terrain. Hectares convertis en m².
+- Sépare les surfaces : sMain = principale (RDC, habitable, construite), sMezz = mezzanine ou soupente, sCave = cave ou sous-sol, sTerr = terrasse, sLand = terrain. Hectares convertis en m².
 - Si seul un prix au m² est donné, mets-le dans "ppm" et laisse "price" à null.
 - Ne devine rien : null ou "" quand l'information est absente.
 Réponds uniquement avec un objet JSON de cette forme :
