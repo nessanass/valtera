@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261120161902"></script>
+<script src="boot.js?v=20261120163641"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261120161902">
+<link rel="stylesheet" href="style.css?v=20261120163641">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -104,6 +104,7 @@
       <label>Surface (m²)<span class="range"><input id="fSmin" inputmode="numeric" placeholder="min"><input id="fSmax" inputmode="numeric" placeholder="max"></span></label>
       <label>Prix au m² (DH)<span class="range"><input id="fUmin" inputmode="numeric" placeholder="min"><input id="fUmax" inputmode="numeric" placeholder="max"></span></label>
       <label>Relevé depuis<input id="fSince" type="date"></label>
+      <label id="fByL" hidden>Ajouté par<select id="fBy"><option value="">Tout le monde</option></select></label>
       <label>Tri<select id="sort">
         <option value="date-desc">Plus récents</option><option value="date-asc">Plus anciens</option>
         <option value="ppm-asc">Prix/m² croissant</option><option value="ppm-desc">Prix/m² décroissant</option>
@@ -142,6 +143,8 @@
         <label>Adresse Gmail<input id="i_email" type="email" placeholder="prenom.nom@gmail.com" required></label>
         <label>Rôle<select id="i_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
         <div class="chks"><label class="chk"><input type="checkbox" checked disabled> Module Témoins</label><label class="chk"><input type="checkbox" id="i_m_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="i_m_export"> Peut exporter (Excel, My Maps, sauvegarde)</label></div>
+        <label>Mes fiches de visite<select id="i_visScope"><option value="own">Ne voit pas mes fiches</option><option value="shared">Voit les fiches que je partage</option><option value="all">Voit toutes mes fiches</option></select></label>
+        <label>Témoins<select id="i_temScope"><option value="all">Voit tous les témoins de l’équipe</option><option value="own">Voit seulement ses propres témoins</option></select></label>
         <label><span>Accès jusqu’au <span class="u">(facultatif)</span></span><input id="i_expires" type="date"></label>
         <div><button class="btn pri" type="submit" id="invBtn">Inviter</button></div>
         <p class="note" id="invNote" role="status"></p>
@@ -151,12 +154,12 @@
         <div class="tblwrap flat"><table class="t roles">
           <thead><tr><th data-k=""></th><th data-k="">Propriétaire</th><th data-k="">Collaborateur</th><th data-k="">Lecteur</th></tr></thead>
           <tbody>
-            <tr><td>Voir les témoins et la carte</td><td>Oui</td><td>Oui</td><td>Oui</td></tr>
+            <tr><td>Voir les témoins et la carte</td><td>Tous</td><td>Tous ou les siens (ton choix)</td><td>Tous ou les siens (ton choix)</td></tr>
             <tr><td>Ajouter un témoin</td><td>Oui</td><td>Oui</td><td>Non</td></tr>
             <tr><td>Modifier</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
             <tr><td>Supprimer</td><td>Oui</td><td>Non</td><td>Non</td></tr>
             <tr><td>Voir les téléphones et contacts</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
-            <tr><td>Fiches de visite (si le module est donné)</td><td>Toutes</td><td>Les siennes</td><td>Non</td></tr>
+            <tr><td>Fiches de visite (si le module est donné)</td><td>Toutes</td><td>Les siennes + les tiennes : aucune, partagées ou toutes (ton choix)</td><td>Non</td></tr>
             <tr><td>Administration</td><td>Oui</td><td>Non</td><td>Non</td></tr>
           </tbody></table></div>
         <p class="note">Dans les observations partagées, les numéros de téléphone et le nom du contact sont remplacés par « [tél. privé] » et « [contact privé] ».</p>
@@ -172,7 +175,7 @@
 <section class="gut vis" id="visitesView" hidden>
   <div class="in">
     <div class="hero vhero"><div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Fiche de visite, fiche terrain et état d’avancement : remplies sur place, téléchargées en PDF.</p></div><button class="btn pri fab" type="button" id="visAdd"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span><span>Nouvelle fiche</span></button></div>
-    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Rechercher une fiche…" aria-label="Rechercher une fiche"><select id="visKindF" aria-label="Type de fiche"><option value="">Tous les types</option><option value="bien">Bâti</option><option value="terrain">Terrain</option><option value="avancement">État d’avancement</option></select><span class="meta" id="visCount"></span></div></div>
+    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Rechercher une fiche…" aria-label="Rechercher une fiche"><select id="visKindF" aria-label="Type de fiche"><option value="">Tous les types</option><option value="bien">Bâti</option><option value="terrain">Terrain</option><option value="avancement">État d’avancement</option></select><select id="visByF" aria-label="Ajoutée par" hidden><option value="">Tout le monde</option></select><span class="meta" id="visCount"></span></div></div>
     <div class="vlist" id="visList"></div>
   </div>
 </section>
@@ -379,6 +382,8 @@
     <div class="fgrid">
       <label class="s2">Rôle<select id="u_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
       <label>Accès jusqu’au<input id="u_expires" type="date"></label>
+      <label class="s2">Mes fiches de visite<select id="u_visScope"><option value="own">Ne voit pas mes fiches</option><option value="shared">Voit les fiches que je partage</option><option value="all">Voit toutes mes fiches</option></select></label>
+      <label class="s2">Témoins<select id="u_temScope"><option value="all">Voit tous les témoins de l’équipe</option><option value="own">Voit seulement ses propres témoins</option></select></label>
     </div>
     <div class="chks"><label class="chk"><input type="checkbox" id="u_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="u_export"> Peut exporter (Excel, My Maps, sauvegarde)</label><label class="chk" id="u_activeL"><input type="checkbox" id="u_active"> Accès actif</label></div>
     <span class="note">Laisse la date vide pour un accès sans limite. Un compte suspendu ou expiré ne voit plus rien ; ses témoins restent dans Valtera.</span>
@@ -390,7 +395,7 @@
   <div class="dh"><div><h2 id="visTitle">Fiche de visite</h2><div class="meta">Date, visiteur, position, ville et quartier se remplissent tout seuls quand c’est possible.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
   <div class="db" id="visBody"></div>
   <input type="file" id="vPhotoIn" accept="image/*" multiple hidden><input type="file" id="vCamIn" accept="image/*" capture="environment" hidden>
-  <div class="df"><button class="btn bad" id="visDel" type="button" hidden>Supprimer</button><label class="chk"><input type="checkbox" id="visDone"> Fiche terminée</label><span class="note" id="visNote"></span><span class="note" id="visSigHint"></span>
+  <div class="df"><button class="btn bad" id="visDel" type="button" hidden>Supprimer</button><label class="chk" id="visDoneL"><input type="checkbox" id="visDone"> Fiche terminée</label><label class="chk" id="visSharedL" hidden><input type="checkbox" id="visShared"> Visible par l’équipe</label><span class="note" id="visNote"></span><span class="note" id="visSigHint"></span>
     <button class="btn" id="visCopy" type="button">Copier le texte</button><button class="btn" id="visTemoin" type="button" hidden>Créer un témoin</button><button class="btn" id="visShare" type="button" data-share="1" hidden>Partager</button><button class="btn" id="visPdf" type="button">Télécharger (PDF)</button><button class="btn pri" id="visSave" type="button">Enregistrer</button></div>
 </dialog>
 <div id="printArea" aria-hidden="true"></div>
@@ -427,7 +432,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261120161902"></script>
-<script src="app.js?v=20261120161902"></script>
+<script src="config.js?v=20261120163641"></script>
+<script src="app.js?v=20261120163641"></script>
 </body>
 </html>

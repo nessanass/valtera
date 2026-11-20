@@ -125,7 +125,8 @@ function stopListen(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];stopAdmi
 function listenErr(e){if(e?.code==="permission-denied"){toast("Accès refusé par le serveur : reconnecte-toi.");$("#status").textContent="Ton accès a changé : recharge la page."}else $("#status").textContent="Connexion interrompue : les données affichées viennent de cet appareil."}
 function listen(){
   stopListen();Object.keys(PUB).forEach(k=>delete PUB[k]);Object.keys(PRIV).forEach(k=>delete PRIV[k]);
-  unsubs.push(tCol().onSnapshot({includeMetadataChanges:true},s=>{
+  const tq=isOwner()||ME.temScope!=="own"?tCol():tCol().where("createdBy","==",ME.uid);
+  unsubs.push(tq.onSnapshot({includeMetadataChanges:true},s=>{
     s.docChanges().forEach(ch=>{if(ch.type==="removed")delete PUB[ch.doc.id];else PUB[ch.doc.id]=ch.doc.data()});
     syncMeta={fromCache:s.metadata.fromCache,hasPendingWrites:s.metadata.hasPendingWrites};scheduleRender()},listenErr));
   if(canAdd()){const q=isOwner()?pCol():pCol().where("createdBy","==",ME.uid);
@@ -214,15 +215,15 @@ function buildStatic(){
 }
 
 /* ===================== filtres et rendu ===================== */
-const FIDS=["fType","fTx","fStatus","fNature","fCity","fDistrict","fPmin","fPmax","fSmin","fSmax","fUmin","fUmax","fSince","near"];
+const FIDS=["fBy","fType","fTx","fStatus","fNature","fCity","fDistrict","fPmin","fPmax","fSmin","fSmax","fUmin","fUmax","fSince","near"];
 function activeFilters(){let n=FIDS.filter(i=>$("#"+i).value.trim()).length;if($("#fPhotos").checked)n++;if($("#fRecent").checked)n++;return n}
 function filtered(){
   const q=$("#q").value.trim().toLowerCase();
   const ft=$("#fType").value,fx=$("#fTx").value,fs=$("#fStatus").value,fn=$("#fNature").value,fc=$("#fCity").value,fd=$("#fDistrict").value.trim().toLowerCase();
   const pmin=numIn($("#fPmin").value),pmax=numIn($("#fPmax").value),smin=numIn($("#fSmin").value),smax=numIn($("#fSmax").value),umin=numIn($("#fUmin").value),umax=numIn($("#fUmax").value);
-  const since=$("#fSince").value,ph=$("#fPhotos").checked,rec=$("#fRecent").checked;
+  const fby=$("#fBy").value,since=$("#fSince").value,ph=$("#fPhotos").checked,rec=$("#fRecent").checked;
   let r=items.filter(c=>{
-    if(ft&&c.type!==ft)return false;if(fx&&c.tx!==fx)return false;
+    if(fby&&c.createdBy!==fby)return false;if(ft&&c.type!==ft)return false;if(fx&&c.tx!==fx)return false;
     if(fs==="__none"?!!c.status:(fs&&c.status!==fs))return false;
     if(fn&&c.nature!==fn)return false;if(fc&&c.city!==fc)return false;
     if(fd&&!(c.district||"").toLowerCase().includes(fd))return false;
@@ -257,12 +258,12 @@ function render(){
   const dists=[...new Set(items.map(c=>c.district).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
   $("#districts").replaceChildren(...dists.map(c=>h("option",{value:c})));
   const nf=activeFilters();$("#fCount").textContent=nf;$("#fCount").hidden=!nf;
-  $("#count").textContent=items.length?fmt(items.length)+" témoins":(loaded?"Aucun témoin":"Chargement…");setNb("#nbTem",items.length);
+  $("#count").textContent=items.length?fmt(items.length)+(items.length>1?" témoins":" témoin"):(loaded?"Aucun témoin":"Chargement…");setNb("#nbTem",items.length);
   const r=filtered();
   renderKpis(r);
   $$("#views button").forEach(b=>b.classList.toggle("on",b.dataset.v===view));
   $("#list").hidden=view!=="list";$("#tblWrap").hidden=view!=="table";$("#mapWrap").hidden=view!=="map";$("#kpis").hidden=view==="map"&&window.innerWidth<700;
-  syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
+  fillAuthorSel("#fBy",items);syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
   renderTray();
 }
 function renderKpis(r){
@@ -309,7 +310,7 @@ function renderCards(r){
     const loc=[c.district,c.city].filter(Boolean).join(", ")||c.address||"Emplacement non renseigné";
     const bd=h("div",{class:"bd"},
       h("div",{class:"top"},h("div",{class:"pills"},c.status?h("span",{class:"pill "+statusClass(c.status),text:c.status}):h("span",{class:"pill",text:"Sans statut"}),isOld(c)?h("span",{class:"pill st-old",text:"Ancien"}):null),pick),
-      h("div",{class:"date",text:[c.date?new Date(c.date).toLocaleDateString("fr-FR"):"Sans date",c.nature&&c.nature!=="Offre"?c.nature:"",c.source].filter(Boolean).join(" · ")}),
+      h("div",{class:"date",text:[c.date?new Date(c.date).toLocaleDateString("fr-FR"):"Sans date",c.nature&&c.nature!=="Offre"?c.nature:"",c.source,c.createdBy&&c.createdBy!==ME.uid?"par "+(c.byName||"un membre"):""].filter(Boolean).join(" · ")}),
       h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:c.ref||"—"}),h("span",{class:"sub",text:[c.type||"Type non renseigné",c.floor].filter(Boolean).join(" · ")})),
       h("div",{class:"price"},fmt(c.price),h("small",{text:priceSuf(c.tx)})),
       surfLine(c),
@@ -1013,34 +1014,44 @@ function expTs(v){if(!v)return null;const d=new Date(v+"T23:59:59");return isNaN
 function isoDay(ms){if(!ms)return "";const d=new Date(ms);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function appLink(){return location.origin+location.pathname.replace(/index\.html$/,"")}
 function accRows(){
-  const rows=Object.entries(USERS).map(([uid,u])=>({uid,email:u.email||"",name:u.name||"",role:u.role,modules:u.modules||[],expires:tsMs(u.expires),active:u.active!==false,lastSeen:tsMs(u.lastSeen),joined:true}));
+  const rows=Object.entries(USERS).map(([uid,u])=>({uid,email:u.email||"",name:u.name||"",role:u.role,modules:u.modules||[],expires:tsMs(u.expires),active:u.active!==false,lastSeen:tsMs(u.lastSeen),joined:true,visScope:u.visScope||"own",temScope:u.temScope||"all"}));
   const known=new Set(rows.map(r=>r.email.toLowerCase()));
-  Object.entries(INVITES).forEach(([em,i])=>{if(!known.has(em))rows.push({uid:null,email:em,name:"",role:i.role,modules:i.modules||[],expires:tsMs(i.expires),active:true,lastSeen:null,joined:false})});
+  Object.entries(INVITES).forEach(([em,i])=>{if(!known.has(em))rows.push({uid:null,email:em,name:"",role:i.role,modules:i.modules||[],expires:tsMs(i.expires),active:true,lastSeen:null,joined:false,visScope:i.visScope||"own",temScope:i.temScope||"all"})});
   const ord={owner:0,collab:1,reader:2};return rows.sort((a,b)=>(ord[a.role]??3)-(ord[b.role]??3)||a.email.localeCompare(b.email))}
 function stateOf(r){if(r.role==="owner")return ["Propriétaire","st-ok"];if(!r.joined)return ["Invité, pas encore connecté","st-warn"];if(!r.active)return ["Suspendu","st-bad"];if(r.expires&&r.expires<Date.now())return ["Expiré","st-old"];return ["Actif","st-ok"]}
 function renderAdmin(){
   if(!isOwner())return;
   const rows=accRows(),T=$("#admTbl");T.innerHTML="";
-  const byUid={};items.forEach(c=>{if(c.createdBy)byUid[c.createdBy]=(byUid[c.createdBy]||0)+1});
+  const byUid={},byUidV={};items.forEach(c=>{if(c.createdBy)byUid[c.createdBy]=(byUid[c.createdBy]||0)+1});visites.forEach(v=>{if(v.createdBy)byUidV[v.createdBy]=(byUidV[v.createdBy]||0)+1});
   $("#admCount").textContent=rows.length?rows.length+" compte"+(rows.length>1?"s":""):"";
-  T.append(h("thead",null,h("tr",null,...["Personne","Rôle","Accès","Jusqu’au","État","Témoins ajoutés","Dernière visite",""].map(l=>h("th",{"data-k":""},l)))));
+  T.append(h("thead",null,h("tr",null,...["Personne","Rôle","Accès","Jusqu’au","État","Témoins","Fiches","Dernière visite",""].map(l=>h("th",{"data-k":""},l)))));
   const tb=h("tbody");
-  if(!rows.length)tb.append(h("tr",null,h("td",{colspan:8,style:"white-space:normal;color:var(--muted);padding:18px",text:"Aucun compte pour l’instant."})));
+  if(!rows.length)tb.append(h("tr",null,h("td",{colspan:9,style:"white-space:normal;color:var(--muted);padding:18px",text:"Aucun compte pour l’instant."})));
   rows.forEach(r=>{const [st,cl]=stateOf(r);
     const acts=r.role==="owner"?h("span",{class:"meta",text:"—"}):h("div",{class:"acts",style:"padding:0;flex-wrap:nowrap"},
+      r.uid?h("button",{class:"btn sm",type:"button",text:"Voir son travail",onclick:()=>showWork(r)}):null,
       h("button",{class:"btn sm",type:"button",text:"Modifier",onclick:()=>openUser(r)}),
       r.joined?h("button",{class:"btn sm",type:"button",text:r.active?"Suspendre":"Réactiver",onclick:e=>toggleActive(r,e.target)}):null);
     tb.append(h("tr",{style:"cursor:default"},
       h("td",{class:"wrap"},h("b",{text:r.name||r.email}),r.name?h("div",{class:"meta",text:r.email}):null),
       h("td",{text:ROLE_LBL[r.role]||r.role||"—"}),
-      h("td",{class:"wrap",text:r.role==="owner"?"Tout":["Témoins",r.modules.includes("visites")&&r.role==="collab"?"Visites":"",r.modules.includes("export")?"export":""].filter(Boolean).join(" + ")}),
+      h("td",{class:"wrap",text:accessTxt(r)}),
       h("td",{class:"num",text:r.role==="owner"?"—":(r.expires?dateFr(r.expires):"Sans limite")}),
       h("td",null,h("span",{class:"chip "+cl,text:st})),
       h("td",{class:"num r",text:r.uid?fmt(byUid[r.uid]||0):"—"}),
+      h("td",{class:"num r",text:r.uid?fmt(byUidV[r.uid]||0):"—"}),
       h("td",{class:"num",text:r.lastSeen?dateFr(r.lastSeen):"—"}),
       h("td",null,acts)))});
   T.append(tb);
 }
+const VIS_LBL={own:"ne voit pas tes fiches",shared:"voit les fiches que tu partages",all:"voit toutes tes fiches"};
+function accessTxt(r){if(r.role==="owner")return "Tout";const vis=r.modules.includes("visites")&&r.role==="collab";
+  return [r.temScope==="own"?"Ses témoins seulement":"Tous les témoins",vis?"Visites ("+VIS_LBL[r.visScope||"own"]+")":"",r.modules.includes("export")?"export":""].filter(Boolean).join(" + ")}
+/* voir ce qu'une personne a ajouté : filtre « Ajouté par » sur les témoins et sur les fiches */
+function showWork(r){showMod("temoins");fillAuthorSel("#fBy",items);const e=$("#fBy");e.value=[...e.options].some(o=>o.value===r.uid)?r.uid:"";
+  $("#filters").hidden=false;$("#fBtn").setAttribute("aria-expanded","true");shown=0;if(view==="map")mv=null;render();
+  const vb=$("#visByF");if(vb){fillAuthorSel("#visByF",visites);vb.value=[...vb.options].some(o=>o.value===r.uid)?r.uid:""}
+  toast("Témoins ajoutés par "+(r.name||r.email)+". Ses fiches : onglet Visites.")}
 async function toggleActive(r,btn){btn.disabled=true;
   try{await commitSoft(fdb.doc("users/"+r.uid).update({active:!r.active}));toast(r.active?"Accès suspendu":"Accès réactivé")}catch(e){toast(errMsg(e))}btn.disabled=false}
 $("#invForm").addEventListener("submit",async e=>{e.preventDefault();
@@ -1048,22 +1059,23 @@ $("#invForm").addEventListener("submit",async e=>{e.preventDefault();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("#invNote").textContent="Adresse e-mail invalide.";return}
   if(email===ME.email){$("#invNote").textContent="C’est ton propre compte.";return}
   const mods=["temoins"].concat($("#i_m_visites").checked?["visites"]:[],$("#i_m_export").checked?["export"]:[]);
-  const inv={email,role:$("#i_role").value,modules:mods,expires:expTs($("#i_expires").value),invitedAt:Date.now()};
+  const inv={email,role:$("#i_role").value,modules:mods,expires:expTs($("#i_expires").value),visScope:$("#i_visScope").value,temScope:$("#i_temScope").value,invitedAt:Date.now()};
   $("#invBtn").disabled=true;
   try{await commitSoft(fdb.doc("invites/"+email).set(inv));
     const link=appLink();
     $("#invNote").replaceChildren("Invitation enregistrée pour ",h("b",{text:email}),". Envoie-lui le lien de Valtera ; il se connecte avec ce compte Google : ",h("span",{class:"num",text:link})," ",h("button",{class:"btn sm",type:"button",text:"Copier le lien",onclick:ev=>copyText(link,ev.target)}));
-    $("#i_email").value="";$("#i_expires").value="";$("#i_m_export").checked=false;$("#i_m_visites").checked=false}
+    $("#i_email").value="";$("#i_expires").value="";$("#i_m_export").checked=false;$("#i_m_visites").checked=false;$("#i_visScope").value="own";$("#i_temScope").value="all"}
   catch(err){$("#invNote").textContent=errMsg(err,"Invitation non enregistrée.")}
   $("#invBtn").disabled=false});
 let uEdit=null,uDelArmed=false;
 function openUser(r){uEdit=r;uDelArmed=false;$("#uDel").classList.remove("arm");$("#uDel").textContent="Retirer l’accès";
   $("#uTitle").textContent=r.name||r.email;$("#uMail").textContent=r.email+(r.joined?"":" · invitation en attente");
   $("#u_role").value=r.role==="reader"?"reader":"collab";$("#u_export").checked=r.modules.includes("export");$("#u_visites").checked=r.modules.includes("visites");
+  $("#u_visScope").value=r.visScope||"own";$("#u_temScope").value=r.temScope||"all";
   $("#u_expires").value=isoDay(r.expires);$("#u_active").checked=r.active;$("#u_activeL").hidden=!r.joined;$("#uNote").textContent="";
   $("#uDlg").showModal()}
 $("#uSave").onclick=async()=>{const r=uEdit;if(!r)return;
-  const upd={role:$("#u_role").value,modules:["temoins"].concat($("#u_visites").checked?["visites"]:[],$("#u_export").checked?["export"]:[]),expires:expTs($("#u_expires").value)};
+  const upd={role:$("#u_role").value,modules:["temoins"].concat($("#u_visites").checked?["visites"]:[],$("#u_export").checked?["export"]:[]),expires:expTs($("#u_expires").value),visScope:$("#u_visScope").value,temScope:$("#u_temScope").value};
   $("#uSave").disabled=true;
   try{const b=fdb.batch();
     if(r.uid)b.update(fdb.doc("users/"+r.uid),{...upd,active:$("#u_active").checked});
@@ -1076,6 +1088,7 @@ $("#uDel").onclick=async()=>{const r=uEdit;if(!r)return;
   try{const b=fdb.batch();if(r.uid)b.delete(fdb.doc("users/"+r.uid));b.delete(fdb.doc("invites/"+r.email));await commitSoft(b.commit());$("#uDlg").close();toast("Accès retiré. Ses témoins restent dans Valtera.")}
   catch(e){$("#uNote").textContent=errMsg(e)}};
 /* ===================== module Fiches de visite ===================== */
+let visRO=false,visSrc={},visUnsubs=[];
 let visites=[],visEditing=null,visPhotos=[],visRefs=[],visDelArmed=false,visQ="",visUnsub=null;
 function canVisites(){return isOwner()||(ME.modules.includes("visites")&&ME.role==="collab")}
 const CH={on:["Oui","Non"],bmf:["B","M","F"]};
@@ -1138,9 +1151,17 @@ const visCol=()=>fdb.collection("visites");
 function visRefStr(n){return "V-"+String(n).padStart(4,"0")}
 
 /* ---------- données ---------- */
+function visMerge(){const m=new Map();["owner","mine"].forEach(k=>(visSrc[k]||[]).forEach(v=>m.set(v.id,v)));visites=[...m.values()];
+  if(typeof setNb==="function")setNb("#nbVis",visites.length);if(curMod==="visites")renderVisites();if(curMod==="admin"&&typeof renderAdmin==="function")renderAdmin()}
+/* le propriétaire voit toutes les fiches ; les autres voient les leurs, plus celles du propriétaire si l'accès le permet (vérifié par le serveur) */
 function listenVisites(){if(visUnsub||!canVisites()||!fdb)return;
-  const q=isOwner()?visCol():visCol().where("createdBy","==",ME.uid);
-  visUnsub=q.onSnapshot(s=>{visites=s.docs.map(d=>({...d.data(),id:d.id}));setNb("#nbVis",visites.length);if(curMod==="visites")renderVisites();if(!s.metadata.fromCache){if(isOwner())ensureVisCounter().then(fixVisRefs);else fixVisRefs()}},e=>toast(errMsg(e,"Fiches de visite indisponibles.")))}
+  const sub=(k,q,main)=>q.onSnapshot(s=>{visSrc[k]=s.docs.map(d=>({...d.data(),id:d.id}));visMerge();
+    if(main&&!s.metadata.fromCache){if(isOwner())ensureVisCounter().then(fixVisRefs);else fixVisRefs()}},
+    e=>{if(main)toast(errMsg(e,"Fiches de visite indisponibles."));else{delete visSrc[k];visMerge()}});
+  visSrc={};visUnsubs=[sub("mine",isOwner()?visCol():visCol().where("createdBy","==",ME.uid),true)];
+  visUnsub=()=>{visUnsubs.forEach(u=>{try{u()}catch(e){}});visUnsubs=[];visSrc={}};
+  if(!isOwner()&&(ME.visScope==="all"||ME.visScope==="shared"))fdb.doc("config/owner").get().then(d=>{const ou=d.exists?d.data().uid:null;if(!ou||!visUnsub||ou===ME.uid)return;
+    let q=visCol().where("createdBy","==",ou);if(ME.visScope==="shared")q=q.where("shared","==",true);visUnsubs.push(sub("owner",q,false))}).catch(()=>{})}
 function stopVisites(){if(visUnsub){try{visUnsub()}catch(e){}visUnsub=null}}
 let visCounterOk=false;
 async function ensureVisCounter(){if(visCounterOk||!isOwner())return;visCounterOk=true;try{const c=await fdb.doc("counters/visites").get();if(!c.exists)await fdb.doc("counters/visites").set({n:Math.max(0,...visites.map(v=>+((v.ref||"").slice(2))||0))})}catch(e){visCounterOk=false}}
@@ -1159,7 +1180,7 @@ function visTitle(v){const k=kindOf(v);
 function visAddr(v){return [[v.residence,v.num&&("N° "+v.num),v.rue].filter(Boolean).join(", "),[v.quartier,v.ville].filter(Boolean).join(", ")].filter(Boolean).join(" – ")}
 function renderVisites(){
   const L=$("#visList");L.innerHTML="";const q=visQ.trim().toLowerCase();
-  const kf=$("#visKindF").value;const r=visites.filter(v=>(!kf||kindOf(v)===kf)&&(!q||[v.ref,v.dossier,v.ville,v.quartier,v.rue,v.residence,v.typo,v.typeBien,(v.destination||[]).join(" "),KINDS[kindOf(v)].label,v.contact,v.visiteur,v.remarques].join(" ").toLowerCase().includes(q)))
+  fillAuthorSel("#visByF",visites);const kf=$("#visKindF").value,bf=$("#visByF").value;const r=visites.filter(v=>(!kf||kindOf(v)===kf)&&(!bf||v.createdBy===bf)&&(!q||[v.ref,v.dossier,v.ville,v.quartier,v.rue,v.residence,v.typo,v.typeBien,(v.destination||[]).join(" "),KINDS[kindOf(v)].label,v.contact,v.visiteur,v.remarques].join(" ").toLowerCase().includes(q)))
     .sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
   $("#visCount").textContent=visites.length?visites.length+" fiche"+(visites.length>1?"s":""):"";
   if(!r.length){L.append(h("div",{class:"empty"},h("b",{text:visites.length?"Aucune fiche ne correspond.":"Aucune fiche de visite pour l’instant."}),h("p",{class:"meta",text:visites.length?"Change la recherche.":"Sur place, appuie sur « + Nouvelle fiche » : la date, le visiteur, la position GPS, la ville et le quartier se remplissent tout seuls, et Valtera propose les témoins proches comme éléments de référence."})));return}
@@ -1167,7 +1188,7 @@ function renderVisites(){
     L.append(h("article",{class:"vcard",tabindex:"0",onclick:()=>openVisite(v),onkeydown:e=>{if(e.key==="Enter"&&e.target===e.currentTarget)openVisite(v)}},
       h("div",{class:"vk k-"+k},ic(k==="bien"?"building":k==="terrain"?"terrain":"crane",30),h("span",{text:kl})),
       h("div",{class:"vbd"},
-        h("div",{class:"top"},h("span",{class:"pill "+(done?"st-ok":"st-warn"),text:done?"Terminée":"Brouillon"}),h("span",{class:"date",text:v.date?new Date(v.date).toLocaleDateString("fr-FR"):""})),
+        h("div",{class:"top"},h("div",{class:"pills"},h("span",{class:"pill "+(done?"st-ok":"st-warn"),text:done?"Terminée":"Brouillon"}),isOwner()&&v.shared?h("span",{class:"pill st-share",text:"Partagée"}):null,v.createdBy&&v.createdBy!==ME.uid?h("span",{class:"pill st-by",text:"par "+(v.byName||v.visiteur||"un membre")}):null),h("span",{class:"date",text:v.date?new Date(v.date).toLocaleDateString("fr-FR"):""})),
         h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:v.ref||"V-…"})),
         h("div",{class:"vt",text:visTitle(v)}),
         v.dossier?h("div",{class:"meta",text:"Dossier "+v.dossier}):null,
@@ -1175,7 +1196,7 @@ function renderVisites(){
         h("div",{class:"meta",text:[v.visiteur,v.valeur?fmt(v.valeur)+" DH":"",(v.refs||[]).length?(v.refs.length+" référence"+(v.refs.length>1?"s":"")):""].filter(Boolean).join(" · ")}),
         h("div",{class:"acts"},h("button",{class:"btn sm",type:"button",onclick:e=>{e.stopPropagation();downloadVisitePdf(v,e.currentTarget)}},ic("download",14),"PDF")))))})}
 $("#visSearch").addEventListener("input",e=>{visQ=e.target.value;renderVisites()});
-$("#visKindF").addEventListener("change",renderVisites);
+$("#visKindF").addEventListener("change",renderVisites);$("#visByF").addEventListener("change",renderVisites);
 
 /* ---------- formulaire ---------- */
 function chipsEl(key,opts,multi){const d=h("div",{class:"chips","data-k":key,role:"group"});
@@ -1254,14 +1275,20 @@ function openVisite(v,preset){
   visPhotos=[...(d.photos||[])];renderVisThumbs();visRefs=[...(d.refs||[])];renderRefs();const rp=$("#vRefPick");if(rp)rp.innerHTML="";
   $("#visTitle").textContent=v?(v.ref?v.ref+" · ":"")+KINDS[visKind].label+(v.dossier?" · dossier "+v.dossier:""):KINDS[visKind].nouv;
   $("#visDone").checked=d.status==="terminee";$("#visDel").hidden=!v||!isOwner();$("#visTemoin").hidden=!v||visKind==="avancement";$("#visNote").textContent="";
-  $("#visShare").hidden=!canSharePdf();updSigHint();
+  $("#visShare").hidden=!canSharePdf();
+  visRO=!!v&&!isOwner()&&v.createdBy!==ME.uid;
+  if(visRO)$("#visBody").querySelectorAll("input,textarea,select,button").forEach(e=>e.disabled=true);
+  $("#visSave").hidden=visRO;$("#visDoneL").hidden=visRO;if(visRO)$("#visTemoin").hidden=true;
+  $("#visSharedL").hidden=!isOwner();$("#visShared").checked=!!d.shared;
+  if(visRO){$("#visNote").textContent="Fiche de "+(v.byName||"l’équipe")+" : lecture seule.";$("#visSigHint").textContent=""}
+  updSigHint();
   $("#visDlg").showModal();$("#visDlg").scrollTop=0;
   if(!v&&!d.gps)visGpsMe(true);
 }
 function readVisite(){
   const o={kind:visKind};fieldsOf().forEach(([k,l,type])=>{if(type==="chips")o[k]=getChips(k);else if(type==="multi")o[k]=getChips(k,true);else{const e=$("#v_"+k);if(!e)return;const val=e.value.trim();o[k]=type==="num"?(val===""?null:numIn(val)):val}});
   o.gps=$("#v_gps").value.trim();const g=coordsFrom(o.gps);if(g)o.gps=gpsStr(g);
-  if(visKind==="bien")o.pieces=readRooms();if(visKind==="avancement")o.lots=readLots();o.refs=[...visRefs];o.photos=[...visPhotos];o.status=$("#visDone").checked?"terminee":"brouillon";return o}
+  if(visKind==="bien")o.pieces=readRooms();if(visKind==="avancement")o.lots=readLots();o.refs=[...visRefs];o.photos=[...visPhotos];o.status=$("#visDone").checked?"terminee":"brouillon";o.shared=isOwner()?$("#visShared").checked:!!visEditing?.shared;return o}
 $("#visSave").onclick=async()=>{const o=readVisite(),base=visEditing,b=$("#visSave");
   if(o.gps&&!coordsFrom(o.gps)){$("#visNote").textContent="Coordonnées illisibles : écris « latitude, longitude »."; return}
   const id=base?.id||("v"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
@@ -1455,7 +1482,7 @@ async function saveSignature(data){if(data.length>250000){$("#sigNote").textCont
   $("#sigSave").disabled=false}
 $("#sigDel").onclick=async()=>{try{await commitSoft(fdb.doc("signatures/"+ME.uid).delete());SIG[ME.uid]=null;$("#sigCur").hidden=true;toast("Signature retirée");updSigHint()}catch(e){$("#sigNote").textContent=errMsg(e)}};
 $("#mSig").onclick=()=>{closeMenu();openSignature()};
-async function updSigHint(){const el=$("#visSigHint");if(!el)return;const owner=visEditing?.createdBy||ME.uid;const s=await getSignature(owner);
+async function updSigHint(){const el=$("#visSigHint");if(!el)return;if(visRO){el.textContent="";return}const owner=visEditing?.createdBy||ME.uid;const s=await getSignature(owner);
   el.replaceChildren(s?"Signature ajoutée automatiquement au PDF.":"",s?"":h("button",{type:"button",class:"linkbtn",text:"Ajouter ma signature",onclick:openSignature}))}
 sigInit();
 
@@ -1720,17 +1747,18 @@ async function resolveAccess(u){
     let inv=null;try{const s=await fdb.doc("invites/"+ME.email).get();inv=s.exists?s.data():null}catch(e){}
     const base={email:ME.email,name:ME.name,active:true,createdAt:Date.now(),lastSeen:Date.now()};
     try{
-      if(inv){d={...base,role:inv.role,modules:inv.modules||[],expires:inv.expires??null};await uref.set(d)}
+      if(inv){d={...base,role:inv.role,modules:inv.modules||[],expires:inv.expires??null,visScope:inv.visScope||"own",temScope:inv.temScope||"all"};await uref.set(d)}
       else{d={...base,role:"owner",modules:["temoins","export"],expires:null};await uref.set(d)}
     }catch(e){if(e?.code==="permission-denied"){showGate("denied","Le compte "+ME.email+" n’a pas accès à Valtera. Demande une invitation à l’administrateur, puis reconnecte-toi.");return}throw e}
   }
   const exp=tsMs(d.expires);
   if(d.role!=="owner"&&d.active===false){showGate("denied","Ton accès à Valtera est suspendu. Contacte l’administrateur.");return}
   if(d.role!=="owner"&&exp&&exp<Date.now()){showGate("denied","Ton accès à Valtera a pris fin le "+dateFr(exp)+". Contacte l’administrateur.");return}
-  ME.role=d.role;ME.modules=d.modules||[];ME.expires=exp;
-  LS.set("vt_me",{uid:u.uid,email:ME.email,role:d.role,modules:ME.modules,expires:exp,active:d.active!==false});
+  ME.role=d.role;ME.modules=d.modules||[];ME.expires=exp;ME.visScope=d.visScope||"own";ME.temScope=d.temScope||"all";
+  LS.set("vt_me",{uid:u.uid,email:ME.email,role:d.role,modules:ME.modules,expires:exp,active:d.active!==false,visScope:ME.visScope,temScope:ME.temScope});
+  if(d.role==="owner")fdb.doc("config/owner").set({uid:u.uid,name:ME.name}).catch(()=>{});
   uref.update({lastSeen:Date.now(),name:ME.name}).catch(()=>{});
-  online=true;hideGate();applyRoleUi();listen();updateAcct();
+  online=true;hideGate();applyRoleUi();listen();updateAcct();if(isOwner())listenAdmin();
   if(exp&&exp-Date.now()<7*864e5)toast("Ton accès prend fin le "+dateFr(exp)+".");
 }
 async function boot(){
@@ -1768,3 +1796,12 @@ function setNb(sel,n){const e=$(sel);if(!e)return;e.hidden=!n;e.textContent=n>99
 function setUser(){const nm=(ME&&(ME.name||ME.email))||"";const u=$("#uName"),a=$("#uAv");if(!u||!a)return;u.textContent=nm||"Mon compte";
   a.textContent=(nm.split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("")||"·").toUpperCase()}
 window.addEventListener("resize",()=>{clearTimeout(window.__vtRs);window.__vtRs=setTimeout(syncTabs,120)});
+
+/* ===================== « Ajouté par » ===================== */
+function authorName(uid,x){if(uid===ME.uid)return "Moi";return (typeof USERS!=="undefined"&&USERS[uid]&&USERS[uid].name)||x.byName||x.visiteur||"Sans nom"}
+function fillAuthorSel(sel,list){const e=$(sel);if(!e)return;const m=new Map();list.forEach(x=>{if(x.createdBy&&!m.has(x.createdBy))m.set(x.createdBy,authorName(x.createdBy,x))});
+  const others=[...m].filter(([u])=>u!==ME.uid).sort((a,b)=>a[1].localeCompare(b[1],"fr"));const cur=e.value;
+  (e.closest("label")||e).hidden=!others.length;
+  const opts=[["","Tout le monde"],...(m.has(ME.uid)?[[ME.uid,"Moi"]]:[]),...others];const sig=opts.map(o=>o.join("=")).join("|");
+  if(e.dataset.sig!==sig){e.replaceChildren(...opts.map(([v,t])=>h("option",{value:v,text:t})));e.dataset.sig=sig}
+  e.value=opts.some(o=>o[0]===cur)?cur:""}
