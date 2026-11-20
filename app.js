@@ -1465,11 +1465,6 @@ async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!naviga
   const city=v=>{if(v&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),v);$("#f_city").value=v;$("#f_city").dispatchEvent(new Event("change"));n++}};
   try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
   if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
-  /* OpenStreetMap n'a pas de quartier ici (zone en limite de commune, par exemple) : celui du témoin le plus proche, à moins de 600 m */
-  if(live()&&!$("#f_district").value.trim()){const cur=editing;let best=null;
-    items.forEach(c=>{if(!c.district||(cur&&c.id===cur.id))return;const p=gpsOf(c);if(!p)return;const d=distM(g,p);if(d<=600&&(!best||d<best[1]))best=[c,d]});
-    if(best){const e=$("#f_district");e.value=best[0].district;e.dispatchEvent(new Event("input"));
-      if(!$("#f_city").value.trim()&&best[0].city)city(best[0].city);toast("Quartier repris du témoin "+(best[0].ref||"voisin")+" (à "+Math.round(best[1])+" m)")}}
   try{const sl=streetLine(await nearStreets(g[0],g[1]));if(!live()||!sl?.rue)return;const a=$("#f_address");
     if(!a.value.trim()||(rue&&a.value===rue&&sl.angle)){a.value=sl.rue;a.dispatchEvent(new Event("input"));toast("Adresse : "+sl.rue)}}catch(e){}}
 /* ===================== signature du visiteur ===================== */
@@ -1670,8 +1665,14 @@ async function downloadVisitePdf(v,btn){const lbl=btn?.textContent;if(btn){btn.d
   catch(e){toast(e?.code==="pdf-lib"?"Le module PDF n’a pas pu se charger : vérifie la connexion puis réessaie.":"PDF impossible pour le moment.")}
   if(btn){btn.disabled=false;btn.textContent=lbl}}
 /* ===================== choisir un point sur la carte satellite ===================== */
-let pickMap=null,pickRes=null,pickPts=null,lastPick=null;
-function pickDone(v){const r=pickRes;pickRes=null;if($("#pickDlg").open)$("#pickDlg").close();if(r)r(v)}
+let pickMap=null,pickRes=null,pickPts=null,lastPick=null,pickMeDot=null,pickAcc=null,pickWatch=null;
+/* « Ma position » : point bleu (et précision) mis à jour tant que la carte est ouverte */
+function showMe(la,lo,acc){if(!pickMap)return;const ll=[la,lo],rad=Math.max(5,Math.min(acc||25,500));
+  if(!pickMeDot){pickAcc=L.circle(ll,{radius:rad,color:"#1d6fe0",weight:1,fillColor:"#1d6fe0",fillOpacity:.12,interactive:false}).addTo(pickMap);
+    pickMeDot=L.circleMarker(ll,{radius:8,color:"#ffffff",weight:3,fillColor:"#1d6fe0",fillOpacity:1,interactive:false}).addTo(pickMap)}
+  else{pickMeDot.setLatLng(ll);pickAcc.setLatLng(ll).setRadius(rad)}}
+function stopPickWatch(){if(pickWatch!=null&&navigator.geolocation)navigator.geolocation.clearWatch(pickWatch);pickWatch=null}
+function pickDone(v){stopPickWatch();const r=pickRes;pickRes=null;if($("#pickDlg").open)$("#pickDlg").close();if(r)r(v)}
 function updPick(){if(!pickMap)return;const c=pickMap.getCenter();$("#pickTxt").textContent=gpsStr([+c.lat.toFixed(6),+c.lng.toFixed(6)])}
 function pickOnMap(init){return new Promise(res=>{
   if(!window.L){toast("Carte indisponible : vérifie la connexion internet.");res(null);return}
@@ -1683,11 +1684,14 @@ function pickOnMap(init){return new Promise(res=>{
     L.control.scale({imperial:false}).addTo(pickMap);pickPts=L.layerGroup().addTo(pickMap);pickMap.on("move",updPick)}
   pickPts.clearLayers();items.forEach(c=>{const g=gpsOf(c);if(g)L.circleMarker(g,{radius:5,color:"#ffffff",weight:1,fillColor:TCOL[c.type]||"#888888",fillOpacity:.9,interactive:false}).addTo(pickPts)});
   const g0=coordsFrom(init||"");const g=g0||lastPick||[33.5731,-7.5898];
-  setTimeout(()=>{pickMap.invalidateSize();pickMap.setView(g,g0?18:(lastPick?17:13));updPick()},60)})}
+  setTimeout(()=>{pickMap.invalidateSize();pickMap.setView(g,g0?18:(lastPick?17:13));updPick()},60);
+  stopPickWatch();let centered=!!g0;
+  if(navigator.geolocation)try{pickWatch=navigator.geolocation.watchPosition(p=>{const c=p.coords;showMe(c.latitude,c.longitude,c.accuracy);
+    if(!centered){centered=true;setTimeout(()=>pickMap.setView([c.latitude,c.longitude],18),80)}},()=>{},{enableHighAccuracy:true,maximumAge:15000,timeout:20000})}catch(e){}})}
 $("#pickOk").onclick=()=>{const c=pickMap.getCenter(),g=[+c.lat.toFixed(6),+c.lng.toFixed(6)];lastPick=g;pickDone(g)};
 $("#pickCancel").onclick=()=>pickDone(null);
 $("#pickDlg").addEventListener("close",()=>{if(pickRes)pickDone(null)});
-$("#pickMe").onclick=async()=>{const b=$("#pickMe");b.disabled=true;try{const [la,lo]=await getPos();pickMap.setView([la,lo],18)}catch(e){geoErr(e)}b.disabled=false};
+$("#pickMe").onclick=async()=>{const b=$("#pickMe");b.disabled=true;try{const [la,lo,acc]=await getPos();showMe(la,lo,acc);pickMap.setView([la,lo],18)}catch(e){geoErr(e)}b.disabled=false};
 $("#pickGo").addEventListener("keydown",e=>{if(e.key!=="Enter")return;e.preventDefault();const g=coordsFrom(e.target.value);if(g)pickMap.setView(g,18);else toast("Coordonnées illisibles : écris « latitude, longitude ».")});
 $("#pickGo").addEventListener("paste",()=>setTimeout(()=>{const g=coordsFrom($("#pickGo").value);if(g)pickMap.setView(g,18)},0));
 /* bouton « Sur la carte » de la fiche témoin */

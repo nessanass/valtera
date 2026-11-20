@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261120182734"></script>
+<script src="boot.js?v=20261120183241"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261120182734">
+<link rel="stylesheet" href="style.css?v=20261120183241">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -408,7 +408,7 @@
   </div>
 </dialog>
 <dialog id="pickDlg" class="wide">
-  <div class="dh"><div><h2>Choisir le point sur la carte</h2><div class="meta">Déplace la carte avec le doigt : le point au centre de la croix sera enregistré.</div></div><button class="btn" type="button" id="pickCancel">Annuler</button></div>
+  <div class="dh"><div><h2>Choisir le point sur la carte</h2><div class="meta">Déplace la carte avec le doigt : le point au centre de la croix sera enregistré. Le point bleu, c’est ta position.</div></div><button class="btn" type="button" id="pickCancel">Annuler</button></div>
   <div class="pickwrap"><div id="pickMap" role="application" aria-label="Carte satellite pour choisir un point"></div><div class="pickcross" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 44 44"><g fill="none" stroke-linecap="round"><g stroke="#000" stroke-opacity=".55" stroke-width="4.5"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g><g stroke="#fff" stroke-width="2"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g></g><circle cx="22" cy="22" r="2.2" fill="#e9a948" stroke="#000" stroke-width=".8"/></svg></div></div>
   <div class="df pickbar"><button class="btn" id="pickMe" type="button">Ma position</button><input id="pickGo" placeholder="Coller des coordonnées…" inputmode="decimal" autocomplete="off" aria-label="Aller à des coordonnées"><span class="num" id="pickTxt"></span><button class="btn pri" id="pickOk" type="button">Valider ce point</button></div>
 </dialog>
@@ -432,7 +432,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261120182734"></script>
-<script src="app.js?v=20261120182734"></script>
+<script src="config.js?v=20261120183241"></script>
+<script src="app.js?v=20261120183241"></script>
 </body>
 </html>
