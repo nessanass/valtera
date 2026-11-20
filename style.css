@@ -488,7 +488,7 @@ main.gut{padding-top:4px}
 .txb.tx-Location{background:var(--rent)}.txb.tx-Pas-de-porte{background:var(--pdp)}
 .sat{position:absolute;inset:0;overflow:hidden;background:#33433a linear-gradient(135deg,#3c4f43,#27352d)}
 .satm{position:absolute;width:512px;height:512px}
-.satm img{position:absolute;width:256px;height:256px;max-width:none;display:block}
+.card .ph .satm img{position:absolute;width:256px;height:256px;max-width:none;object-fit:fill;display:block}
 .satpin{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:var(--brand);border:3px solid #fff;box-shadow:0 0 0 7px color-mix(in srgb,var(--brand) 28%,transparent),0 2px 6px rgba(0,0,0,.45)}
 .sat .src{position:absolute;right:9px;bottom:9px;font:600 10.5px var(--f-body);letter-spacing:.03em;color:#fff;background:rgba(0,0,0,.45);padding:2px 7px;border-radius:999px}
 .noph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);background:linear-gradient(160deg,var(--surface-2),var(--brand-soft));font-size:12.5px;font-weight:600;text-align:center;padding:12px}
