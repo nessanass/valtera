@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261120183241"></script>
+<script src="boot.js?v=20261120183706"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261120183241">
+<link rel="stylesheet" href="style.css?v=20261120183706">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -88,6 +88,7 @@
         <input id="q" type="search" placeholder="Rechercher : quartier, réf. T-0001, téléphone, code SAX…" aria-label="Rechercher">
       </div>
       <button class="btn" id="fBtn" type="button" aria-expanded="false"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5h9.5M17.5 7.5H20M4 16.5h3.5M11.5 16.5H20"/><circle cx="15.5" cy="7.5" r="2"/><circle cx="9.5" cy="16.5" r="2"/></svg></span>Filtres <span class="badge" id="fCount" hidden>0</span></button>
+      <div class="seg natseg" id="natSeg" role="tablist" aria-label="Section"><button type="button" data-v="">Tout</button><button type="button" data-v="off">Offres</button><button type="button" data-v="tr">Transactions <span class="nb2" hidden></span></button></div>
       <div class="seg" id="views">
         <button type="button" data-v="list">Cartes</button><button type="button" data-v="table">Tableau</button><button type="button" data-v="map">Carte</button>
       </div>
@@ -217,8 +218,18 @@
         <label>Type de bien<select id="f_type"></select></label>
         <label>Nature du témoin<select id="f_nature"></select></label>
         <label>Statut<select id="f_status"></select></label>
-        <label>Date du relevé<input id="f_date" type="date"></label>
+        <label><span id="dateLbl">Date du relevé</span><input id="f_date" type="date"></label>
       </div>
+    </fieldset>
+
+    <fieldset id="trFs" hidden>
+      <legend>Transaction (Conservation foncière)</legend>
+      <div class="fgrid">
+        <label>N° du titre foncier<input id="f_tf" placeholder="ex. 12345/C" autocomplete="off"></label>
+        <label class="s2">Vendeur <span class="u">(privé)</span><input id="f_vendeur" autocomplete="off"></label>
+        <label class="s2">Acheteur <span class="u">(privé)</span><input id="f_acheteur" autocomplete="off"></label>
+      </div>
+      <span class="note">Le vendeur et l’acheteur restent privés, comme les téléphones : seuls toi et la personne qui a ajouté la transaction les voient. Le prix, la surface et la date de la vente servent de comparables.</span>
     </fieldset>
 
     <fieldset>
@@ -432,7 +443,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261120183241"></script>
-<script src="app.js?v=20261120183241"></script>
+<script src="config.js?v=20261120183706"></script>
+<script src="app.js?v=20261120183706"></script>
 </body>
 </html>

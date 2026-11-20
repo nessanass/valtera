@@ -654,3 +654,9 @@ legend,.vh{font:700 11.5px var(--f-body);letter-spacing:.08em}
 #visByF{border:none;background:none;color:inherit;font:inherit;padding:8px 0;max-width:34%}
 .hero #visByF{color:#fff}
 #visByF option{color:var(--ink);background:var(--surface)}
+
+.pill.st-tr{background:color-mix(in srgb,var(--pdp) 14%,transparent);color:var(--pdp)}
+.tools .natseg{order:5}
+.natseg .nb2{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:9px;background:var(--brand);color:#fff;font:700 11px/18px var(--f-body);text-align:center}
+.natseg button.on .nb2{background:var(--navy);color:#fff}
+@media (max-width:759px){.tools .natseg{flex:1 1 100%;display:flex}.tools .natseg button{flex:1 1 0}}

@@ -4,7 +4,7 @@ const TYPES=["Appartement","Villa","Maison","Local commercial","Bureau","Plateau
 const TXS=["Vente","Location","Pas-de-porte"];
 const STATUS=["À vérifier","Vérifié","Vendu / loué","Rejeté"];
 const NATURES=["Offre","Transaction","Expertise","Estimation agence"];
-const SOURCES=["Visite terrain","Agence / courtier","Particulier","Avito","Mubawab","Yakeey","Agenz","Autre site","SAX","Collègue"];
+const SOURCES=["Conservation foncière","Visite terrain","Agence / courtier","Particulier","Avito","Mubawab","Yakeey","Agenz","Autre site","SAX","Collègue"];
 const STATES=["Neuf","Bon état","Moyen","À rénover","En construction","Gros œuvre"];
 const STANDINGS=["Économique","Moyen standing","Haut standing","Luxe"];
 const LAND_TYPES=["Terrain","Villa","Maison"];
@@ -84,7 +84,7 @@ function applyRoleUi(){
 /* ===================== Firebase ===================== */
 let auth=null,fdb=null,unsubs=[];
 const PUB={},PRIV={};let mergeT=null,syncMeta={fromCache:true,hasPendingWrites:false};
-const ITEM_KEYS=["date","tx","type","price","surface","sMain","sMezz","sCave","sTerr","sLand","basis","avance","loyer","city","district","address","gps","floor","rooms","state","standing","age","nature","status","source","link","code","dossier","notes","photos","createdAt","updatedAt"];
+const ITEM_KEYS=["tf","date","tx","type","price","surface","sMain","sMezz","sCave","sTerr","sLand","basis","avance","loyer","city","district","address","gps","floor","rooms","state","standing","age","nature","status","source","link","code","dossier","notes","photos","createdAt","updatedAt"];
 const NUMKEYS=new Set(["price","surface","sMain","sMezz","sCave","sTerr","sLand","avance","loyer","age","createdAt","updatedAt"]);
 function initFirebase(){
   if(!window.firebase||!CFG.firebase||!CFG.firebase.apiKey)return false;
@@ -113,11 +113,11 @@ function normItem(o){const x={};
   return x}
 function splitItem(o,base){
   const createdBy=base?.createdBy||ME.uid,x=normItem(o);
-  const pub={...x,notes:maskNotes(x.notes,o.contactName),createdBy,byName:base?base.byName||"":ME.name,ref:base?.ref||o.ref||""};
-  const priv={contactName:String(o.contactName||""),contactTel:String(o.contactTel||""),notes:x.notes,createdBy};
+  const pub={...x,notes:maskNotes(maskNotes(maskNotes(x.notes,o.contactName),o.vendeur),o.acheteur),createdBy,byName:base?base.byName||"":ME.name,ref:base?.ref||o.ref||""};
+  const priv={contactName:String(o.contactName||""),contactTel:String(o.contactTel||""),vendeur:String(o.vendeur||""),acheteur:String(o.acheteur||""),notes:x.notes,createdBy};
   return {pub,priv}}
 function rebuild(){items=Object.keys(PUB).map(id=>{const p=PUB[id],q=PRIV[id];
-  return q?{...p,id,contactName:q.contactName||"",contactTel:q.contactTel||"",notes:q.notes!=null&&q.notes!==""?q.notes:(p.notes||"")}:{...p,id,contactName:"",contactTel:""}})}
+  return q?{...p,id,contactName:q.contactName||"",contactTel:q.contactTel||"",vendeur:q.vendeur||"",acheteur:q.acheteur||"",notes:q.notes!=null&&q.notes!==""?q.notes:(p.notes||"")}:{...p,id,contactName:"",contactTel:""}})}
 let refsChecked=false;
 function scheduleRender(){clearTimeout(mergeT);mergeT=setTimeout(()=>{rebuild();loaded=true;render();
   if(!refsChecked&&!syncMeta.fromCache&&online){refsChecked=true;(isOwner()?ensureCounter():Promise.resolve()).then(fixRefs);if(isOwner())migrateSousSol()}updateAcct();if($("#view").open&&viewing){const c=items.find(x=>x.id===viewing.id);if(c)viewing=c}if($("#etude").open)renderEtude();if(curMod==="admin")renderAdmin()},60)}
@@ -223,6 +223,7 @@ function filtered(){
   const pmin=numIn($("#fPmin").value),pmax=numIn($("#fPmax").value),smin=numIn($("#fSmin").value),smax=numIn($("#fSmax").value),umin=numIn($("#fUmin").value),umax=numIn($("#fUmax").value);
   const fby=$("#fBy").value,since=$("#fSince").value,ph=$("#fPhotos").checked,rec=$("#fRecent").checked;
   let r=items.filter(c=>{
+    if(natView==="tr"&&c.nature!=="Transaction")return false;if(natView==="off"&&c.nature==="Transaction")return false;
     if(fby&&c.createdBy!==fby)return false;if(ft&&c.type!==ft)return false;if(fx&&c.tx!==fx)return false;
     if(fs==="__none"?!!c.status:(fs&&c.status!==fs))return false;
     if(fn&&c.nature!==fn)return false;if(fc&&c.city!==fc)return false;
@@ -233,7 +234,7 @@ function filtered(){
     if(since&&!(c.date&&c.date>=since))return false;
     if(ph&&!(c.photos&&c.photos.length))return false;
     if(rec&&isOld(c))return false;
-    if(q&&![c.district,c.address,c.city,c.contactName,c.contactTel,c.notes,c.type,c.ref,c.code,c.dossier,c.floor,c.source].join(" ").toLowerCase().includes(q))return false;
+    if(q&&![c.tf,c.vendeur,c.acheteur,c.district,c.address,c.city,c.contactName,c.contactTel,c.notes,c.type,c.ref,c.code,c.dossier,c.floor,c.source].join(" ").toLowerCase().includes(q))return false;
     return true;
   });
   const nv=$("#near").value.trim(),center=nv?coordsFrom(nv):null,rad=+$("#radius").value;
@@ -263,7 +264,7 @@ function render(){
   renderKpis(r);
   $$("#views button").forEach(b=>b.classList.toggle("on",b.dataset.v===view));
   $("#list").hidden=view!=="list";$("#tblWrap").hidden=view!=="table";$("#mapWrap").hidden=view!=="map";$("#kpis").hidden=view==="map"&&window.innerWidth<700;
-  fillAuthorSel("#fBy",items);syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
+  fillAuthorSel("#fBy",items);natCounts();syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
   renderTray();
 }
 function renderKpis(r){
@@ -309,9 +310,9 @@ function renderCards(r){
     const pick=h("label",{class:"pick",title:"Ajouter à l’étude de marché"},cb,ic("check",16));
     const loc=[c.district,c.city].filter(Boolean).join(", ")||c.address||"Emplacement non renseigné";
     const bd=h("div",{class:"bd"},
-      h("div",{class:"top"},h("div",{class:"pills"},c.status?h("span",{class:"pill "+statusClass(c.status),text:c.status}):h("span",{class:"pill",text:"Sans statut"}),isOld(c)?h("span",{class:"pill st-old",text:"Ancien"}):null),pick),
-      h("div",{class:"date",text:[c.date?new Date(c.date).toLocaleDateString("fr-FR"):"Sans date",c.nature&&c.nature!=="Offre"?c.nature:"",c.source,c.createdBy&&c.createdBy!==ME.uid?"par "+(c.byName||"un membre"):""].filter(Boolean).join(" · ")}),
-      h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:c.ref||"—"}),h("span",{class:"sub",text:[c.type||"Type non renseigné",c.floor].filter(Boolean).join(" · ")})),
+      h("div",{class:"top"},h("div",{class:"pills"},c.nature==="Transaction"?h("span",{class:"pill st-tr",text:"Transaction"}):null,c.status?h("span",{class:"pill "+statusClass(c.status),text:c.status}):h("span",{class:"pill",text:"Sans statut"}),isOld(c)?h("span",{class:"pill st-old",text:"Ancien"}):null),pick),
+      h("div",{class:"date",text:[c.date?(c.nature==="Transaction"?"Vendu le ":"")+new Date(c.date).toLocaleDateString("fr-FR"):"Sans date",c.nature&&c.nature!=="Offre"&&c.nature!=="Transaction"?c.nature:"",c.source,c.createdBy&&c.createdBy!==ME.uid?"par "+(c.byName||"un membre"):""].filter(Boolean).join(" · ")}),
+      h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:c.ref||"—"}),h("span",{class:"sub",text:[c.type||"Type non renseigné",c.floor,c.tf?"TF "+c.tf:""].filter(Boolean).join(" · ")})),
       h("div",{class:"price"},fmt(c.price),h("small",{text:priceSuf(c.tx)})),
       surfLine(c),
       c._d!=null?h("div",{class:"dist"},ic("pin",14),"à "+(c._d>=1000?(c._d/1000).toFixed(2).replace(".",",")+" km":Math.round(c._d)+" m")):null,
@@ -394,10 +395,10 @@ function openView(c){
       ["GPS",g?h("span",null,h("span",{class:"num",text:gpsStr(g)}),h("a",{class:"btn sm copy",href:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(gpsStr(g).replace(/\s/g,"")),target:"_blank",rel:"noopener",text:"Google Maps"}),h("a",{class:"btn sm copy",href:"https://www.google.com/maps/dir/?api=1&destination="+g[0]+","+g[1],target:"_blank",rel:"noopener",text:"Itinéraire"}),h("button",{class:"btn sm copy",type:"button",text:"Sur la carte",onclick:()=>{$("#view").close();showOnMap(c)}})):null]])),
     h("section",null,h("h3",{class:"vh",text:"Bien"}),dl([["Pièces",c.rooms],["État",c.state],["Standing",c.standing],["Âge",c.age?c.age+" ans":null]])),
     h("section",null,h("h3",{class:"vh",text:"Source et suivi"}),dl([
-      ["Nature",c.nature],["Statut",c.status?h("span",{class:"chip "+statusClass(c.status),text:c.status}):null],["Canal",c.source],["Contact",c.contactName],["Téléphone",tel],
+      ["Nature",c.nature],["Titre foncier",c.tf?h("b",{class:"num",text:c.tf}):null],["Vendeur",c.vendeur],["Acheteur",c.acheteur],["Statut",c.status?h("span",{class:"chip "+statusClass(c.status),text:c.status}):null],["Canal",c.source],["Contact",c.contactName],["Téléphone",tel],
       ["Annonce",c.link?h("a",{href:c.link,target:"_blank",rel:"noopener",text:"Ouvrir l’annonce"}):null],
       ["Référence",c.ref?h("b",{class:"num",text:c.ref}):null],["Code externe",c.code],["Dossier",c.dossier],["Ajouté par",c.byName],
-      ["Relevé le",c.date?new Date(c.date).toLocaleDateString("fr-FR")+(isOld(c)?" (ancien)":""):"Sans date"],
+      [c.nature==="Transaction"?"Vendu le":"Relevé le",c.date?new Date(c.date).toLocaleDateString("fr-FR")+(isOld(c)?" (ancien)":""):"Sans date"],
       ["Modifié le",c.updatedAt?new Date(c.updatedAt).toLocaleDateString("fr-FR"):null]]))));
   if(c.notes)B.append(h("section",null,h("h3",{class:"vh",text:"Observations"}),h("p",{class:"pre",text:c.notes})));
   if(c.photos?.length)B.append(h("section",null,h("h3",{class:"vh",text:"Photos"}),h("div",{class:"gallery"},c.photos.map(p=>h("img",{src:photoUrl(p),"data-pid":p.id,alt:"",loading:"lazy"})))));
@@ -419,11 +420,11 @@ async function copyText(t,btn){try{await navigator.clipboard.writeText(t);if(btn
 
 /* ===================== fiche : saisie ===================== */
 let editing=null,tx="Vente",basis="bati",basisTouched=false,photos=[],lastEdited="price",shot=null,delArmed=false,dupOk=false;
-const TXT=["type","nature","status","date","city","district","address","gps","floor","rooms","state","standing","source","contactName","contactTel","link","code","dossier","notes"];
+const TXT=["tf","vendeur","acheteur","type","nature","status","date","city","district","address","gps","floor","rooms","state","standing","source","contactName","contactTel","link","code","dossier","notes"];
 const NUMS=["sMain","sMezz","sCave","sTerr","sLand","price","avance","loyer","age"];
 function setTx(v){tx=v;$$("#txSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
   $("#priceLbl").textContent=v==="Location"?"Loyer mensuel":v==="Pas-de-porte"?"Montant du pas-de-porte":"Prix demandé";
-  $("#ppmLbl").textContent=v==="Location"?"Loyer au m² / mois":"Prix au m²";
+  $("#ppmLbl").textContent=v==="Location"?"Loyer au m² / mois":"Prix au m²";if(typeof updTrans==="function")updTrans();
   $("#avanceL").hidden=v!=="Location";$("#loyerL").hidden=v==="Location";
   $("#loyerLbl").textContent=v==="Vente"?"Loyer actuel si occupé":"Loyer mensuel";
   updCalc()}
@@ -466,7 +467,8 @@ function openForm(c,preset){
   if(!$("#f_type").value)$("#f_type").value="Autre";
   basisTouched=!!c?.basis;basis=c?basisOf(c):basisDefault($("#f_type").value);$$("#basisSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===basis));
   photos=c?.photos?[...c.photos]:[];renderThumbs();
-  lastEdited="price";setTx(c?.tx||"Vente");
+  if(!c&&natView==="tr"){$("#f_nature").value="Transaction";ensureOpt($("#f_source"),"Conservation foncière");$("#f_source").value="Conservation foncière";$("#f_status").value="Vérifié";$("#f_date").value="";$("#dlgTitle").textContent="Nouvelle transaction"}
+  lastEdited="price";setTx(c?.tx||"Vente");updTrans();
   const r=retained();$("#f_ppm").value=c?.price&&r?plain(Math.round(c.price/r)):"";updCalc();
   $("#qText").value=preset||"";$("#qStatus").textContent="";clearShot();
   $("#delBtn").hidden=!c||!canDelete();$("#photoBtn").disabled=$("#camBtn").disabled=!online;
@@ -635,6 +637,12 @@ function smartParse(raw){
   if(eq.length)out.notes.push(eq.join(", ").replace(/^./,x=>x.toUpperCase())+".");
   const cour=t.match(/(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m)?\s*(?:de\s*)?cour\b/);if(cour)out.notes.push("Cour : "+cour[1]+" m² (non comptée dans la surface).");
   if(/(?:^|\n)[ \t]*angle\b/i.test(src)&&!out.address)out.notes.push("Situé à l’angle.");
+  const tfv=LBL(/(?:^|\n|;)[ \t]*(?:t\.?\s?f\.?|titre(?:\s+foncier)?|r[ée]quisition)[ \t]*(?:n[°o]\.?)?[ \t]*:[ \t]*([^\n;]*)/i);if(!EMPTY(tfv))out.tf=tfv.toUpperCase().replace(/\s+/g," ");
+  const ven=LBL(/(?:^|\n|;)[ \t]*vendeurs?[ \t]*:[ \t]*([^\n;]*)/i),ach=LBL(/(?:^|\n|;)[ \t]*(?:acheteurs?|acqu[ée]reurs?)[ \t]*:[ \t]*([^\n;]*)/i);
+  if(!EMPTY(ven))out.vendeur=ven;if(!EMPTY(ach))out.acheteur=ach;
+  const dv=LBL(/(?:^|\n|;)[ \t]*date[ \t]*(?:de[ \t]*(?:la[ \t]*)?|d['’][ \t]*)?(?:vente|acte|achat|transaction|mutation|inscription)[ \t]*:[ \t]*([^\n;]*)/i),dm=dv.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})|(\d{4})-(\d{2})-(\d{2})/);
+  if(dm)out.date=dm[4]?dm[4]+"-"+dm[5]+"-"+dm[6]:(dm[3].length===2?"20"+dm[3]:dm[3])+"-"+dm[2].padStart(2,"0")+"-"+dm[1].padStart(2,"0");
+  if(out.tf||out.vendeur||out.acheteur||/conservation fonci|ancfcc|titre foncier/.test(t)){out.nature="Transaction";out.tx="Vente"}
   if(out.ppm)out.notes.unshift("Prix demandé : "+fmt(out.ppm)+" DH/m².");
   if(/vendu/.test(t))out.notes.push("Signalé vendu.");
   return out;
@@ -653,6 +661,8 @@ function applyParsed(p,src,label){
   setV("district",p.district,"quartier");setV("address",p.address,"adresse");setV("floor",p.floor,"étage");setV("rooms",p.rooms,"pièces");
   if(p.state&&STATES.includes(p.state))setV("state",p.state,"état");if(p.standing&&STANDINGS.includes(p.standing))setV("standing",p.standing,"standing");
   setV("link",p.link,"lien");setV("contactName",p.contactName,"contact");
+  setV("tf",p.tf,"titre foncier");setV("vendeur",p.vendeur,"vendeur");setV("acheteur",p.acheteur,"acheteur");setV("date",p.date,"date");
+  if(p.nature==="Transaction"){$("#f_nature").value="Transaction";filled.push("transaction");if(!$("#f_source").value){ensureOpt($("#f_source"),"Conservation foncière");$("#f_source").value="Conservation foncière"}}updTrans();
   if(src){const cur=$("#f_notes").value.trim();const add=[...(p.notes||[]),"Note d’origine : "+src.replace(/\s*\n\s*/g," ; ")].join(" ");if(!cur.includes(src.slice(0,40)))$("#f_notes").value=(cur?cur+"\n":"")+add}
   updCalc();if(coordsFrom($("#f_gps").value))temGeocode();
   $("#qStatus").textContent=filled.length?label+" : "+[...new Set(filled)].join(", ")+". Vérifie la fiche avant d’enregistrer."+(p.flag?" Attention : un montant est à vérifier.":""):"Rien n’a été reconnu dans ce texte. Remplis la fiche à la main ou essaie l’analyse avec Claude.";
@@ -802,9 +812,9 @@ $("#mPaste").onclick=()=>{closeMenu();openForm()};
 /* ===================== export ===================== */
 $("#exportBtn").onclick=async()=>{closeMenu();
   const r=filtered();if(!r.length){toast("Rien à exporter.");return}
-  const head=["Date","Opération","Type","Prix (DH)","Surface retenue (m²)","Prix/m²","Principale","Mezzanine","Cave","Terrasse","Terrain","Avance","Loyer","Ville","Quartier","Adresse","GPS","Étage","Pièces","État","Standing","Nature","Statut","Canal","Contact","Téléphone","Code","Dossier","Lien","Observations","Photos"];
+  const head=["Date","Opération","Type","Prix (DH)","Surface retenue (m²)","Prix/m²","Principale","Mezzanine","Cave","Terrasse","Terrain","Avance","Loyer","Ville","Quartier","Adresse","GPS","Étage","Pièces","État","Standing","Nature","Statut","Canal","Contact","Téléphone","Code","Dossier","Lien","Observations","Photos","Titre foncier","Vendeur","Acheteur"];
   const e=v=>{v=v==null?"":String(v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-  const lines=[head.join(";")].concat(r.map(c=>[c.date,c.tx,c.type,c.price,c.surface,ppmOf(c)?Math.round(ppmOf(c)):"",c.sMain,c.sMezz,c.sCave,c.sTerr,c.sLand,c.avance,c.loyer,c.city,c.district,c.address,c.gps,c.floor,c.rooms,c.state,c.standing,c.nature,c.status,c.source,c.contactName,c.contactTel,c.code,c.dossier,c.link,c.notes,(c.photos||[]).length].map(e).join(";")));
+  const lines=[head.join(";")].concat(r.map(c=>[c.date,c.tx,c.type,c.price,c.surface,ppmOf(c)?Math.round(ppmOf(c)):"",c.sMain,c.sMezz,c.sCave,c.sTerr,c.sLand,c.avance,c.loyer,c.city,c.district,c.address,c.gps,c.floor,c.rooms,c.state,c.standing,c.nature,c.status,c.source,c.contactName,c.contactTel,c.code,c.dossier,c.link,c.notes,(c.photos||[]).length,c.tf,c.vendeur,c.acheteur].map(e).join(";")));
   await saveFile("comparables_"+new Date().toISOString().slice(0,10)+".csv","﻿"+lines.join("\r\n"))};
 
 /* ===================== import My Maps (KML) ===================== */
@@ -1843,3 +1853,15 @@ function fillAuthorSel(sel,list){const e=$(sel);if(!e)return;const m=new Map();l
   e.value=opts.some(o=>o[0]===cur)?cur:""}
 
 $("#f_gps").addEventListener("change",()=>{if(coordsFrom($("#f_gps").value))temGeocode()});
+
+/* ===================== transactions (Conservation foncière) ===================== */
+let natView=(()=>{const v=LS.get("vt_nat","");return v==="tr"||v==="off"?v:""})();
+function updTrans(){const tr=$("#f_nature").value==="Transaction";$("#trFs").hidden=!tr;$("#dateLbl").textContent=tr?"Date de la vente":"Date du relevé";
+  if(tx==="Vente")$("#priceLbl").textContent=tr?"Prix de vente":"Prix demandé"}
+function natUi(){$$("#natSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===natView));
+  const lb=$("#addBtn span:last-child");if(lb)lb.textContent=natView==="tr"?"Nouvelle transaction":"Nouveau témoin"}
+function setNat(v){natView=v;LS.set("vt_nat",v);natUi();shown=0;if(view==="map")mv=null;render()}
+function natCounts(){const n=items.filter(c=>c.nature==="Transaction").length;const b=$("#natSeg [data-v=tr] .nb2");if(b){b.textContent=n?String(n):"";b.hidden=!n}}
+$("#natSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setNat(b.dataset.v)});
+$("#f_nature").addEventListener("change",updTrans);
+natUi();
