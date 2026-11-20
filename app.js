@@ -1625,7 +1625,9 @@ $("#impGo").onclick=async()=>{if(!pending.length)return;if(!isOwner()){toast(err
   catch(e){pending=pending.slice(done);$("#impProg").textContent=(done?done+" importés, ":"")+errMsg(e,"Échec de l’import.")+" Appuie encore pour importer le reste.";$("#impGo").disabled=false;$("#impGo").textContent="Importer "+pending.length+" témoins"}};
 
 /* ===================== connexion ===================== */
-function showGate(mode,msg){const g=$("#gate");g.hidden=false;
+let gateT=null;
+function showGate(mode,msg){const g=$("#gate");g.hidden=false;clearTimeout(gateT);
+  if(mode==="wait")gateT=setTimeout(()=>{if(g.hidden||$("#gateWait").hidden)return;$("#gateMsg").replaceChildren("L’ouverture prend plus de temps que prévu. ",h("button",{class:"linkbtn",type:"button",text:"Recharger",onclick:()=>location.reload()})," · ",h("button",{class:"linkbtn",type:"button",text:"Réparer l’application",onclick:()=>window.__vtReset&&window.__vtReset()}))},20000);
   $("#loginBtn").hidden=mode!=="login";$("#switchBtn").hidden=mode!=="denied";$("#gateWait").hidden=mode!=="wait";
   $("#gateMsg").textContent=msg||(mode==="config"?"Valtera n’est pas encore relié à son serveur (config.js).":"")}
 function hideGate(){$("#gate").hidden=true}
@@ -1678,7 +1680,7 @@ async function resolveAccess(u){
   if(exp&&exp-Date.now()<7*864e5)toast("Ton accès prend fin le "+dateFr(exp)+".");
 }
 async function boot(){
-  buildStatic();applyRoleUi();render();
+  buildStatic();applyRoleUi();render();window.__vtBooted=true;
   if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
   if(!initFirebase()){showGate("config");return}
   await enablePersist();
