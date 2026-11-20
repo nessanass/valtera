@@ -46,7 +46,7 @@ function basisOf(c){return c.basis||basisDefault(c.type)}
 /* ===================== état ===================== */
 const CFG=window.VT_CONFIG||{};
 let items=[],etudes=[],online=false,loaded=false,sampleCap=null,sampleImg=false;
-let S={cm:.5,cc:.33,ct:.3,valid:12,nego:10};
+let S={cm:.5,cc:.5,ct:.3,valid:12,nego:10};
 let view=LS.get("mc_view","list"),shown=0;
 let sel=new Set(LS.get("mc_sel",[]));
 let etude=LS.get("mc_etude",null)||newEtude();
@@ -120,7 +120,7 @@ function rebuild(){items=Object.keys(PUB).map(id=>{const p=PUB[id],q=PRIV[id];
   return q?{...p,id,contactName:q.contactName||"",contactTel:q.contactTel||"",notes:q.notes!=null&&q.notes!==""?q.notes:(p.notes||"")}:{...p,id,contactName:"",contactTel:""}})}
 let refsChecked=false;
 function scheduleRender(){clearTimeout(mergeT);mergeT=setTimeout(()=>{rebuild();loaded=true;render();
-  if(!refsChecked&&!syncMeta.fromCache&&online){refsChecked=true;(isOwner()?ensureCounter():Promise.resolve()).then(fixRefs)}updateAcct();if($("#view").open&&viewing){const c=items.find(x=>x.id===viewing.id);if(c)viewing=c}if($("#etude").open)renderEtude();if(curMod==="admin")renderAdmin()},60)}
+  if(!refsChecked&&!syncMeta.fromCache&&online){refsChecked=true;(isOwner()?ensureCounter():Promise.resolve()).then(fixRefs);if(isOwner())migrateSousSol()}updateAcct();if($("#view").open&&viewing){const c=items.find(x=>x.id===viewing.id);if(c)viewing=c}if($("#etude").open)renderEtude();if(curMod==="admin")renderAdmin()},60)}
 function stopListen(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];stopAdmin();stopVisites()}
 function listenErr(e){if(e?.code==="permission-denied"){toast("Accès refusé par le serveur : reconnecte-toi.");$("#status").textContent="Ton accès a changé : recharge la page."}else $("#status").textContent="Connexion interrompue : les données affichées viennent de cet appareil."}
 function listen(){
@@ -134,6 +134,17 @@ function listen(){
   listenVisites();
   unsubs.push(fdb.doc("config/settings").onSnapshot(d=>{if(d.exists){const x=d.data();for(const k in S)if(x[k]!=null&&isFinite(+x[k]))S[k]=+x[k];scheduleRender()}},()=>{}));
 }
+/* une seule fois : le sous-sol compte pour moitié, comme la mezzanine ; recalcule la surface pondérée des anciens témoins */
+let migSS=false;
+async function migrateSousSol(){if(migSS||!isOwner()||!online)return;migSS=true;
+  try{const ref=fdb.doc("config/settings"),d=await ref.get({source:"server"}),x=d.exists?d.data():{};if(x.v2)return;
+    const old=x.cc!=null&&isFinite(+x.cc)?+x.cc:.33,cc=old===.33?.5:old,cm=x.cm!=null?+x.cm:S.cm,ct=x.ct!=null?+x.ct:S.ct;S.cc=cc;
+    const f=(c,k)=>Math.round(((c.sMain||0)+cm*(c.sMezz||0)+k*(c.sCave||0)+ct*(c.sTerr||0))*100)/100;
+    const b=fdb.batch();let n=0;
+    items.forEach(c=>{if(!(c.sCave>0)||!(c.surface>0)||basisOf(c)==="terrain"||cc===old)return;if(Math.abs(f(c,old)-c.surface)<.02){b.update(tCol().doc(c.id),{surface:f(c,cc)});n++}});
+    b.set(ref,{cm,cc,ct,valid:x.valid!=null?+x.valid:S.valid,nego:x.nego!=null?+x.nego:S.nego,v2:1});
+    await b.commit();if(n)toast(n+" témoin"+(n>1?"s":"")+" avec sous-sol recalculé"+(n>1?"s":"")+" : sous-sol compté à 50 %.")}
+  catch(e){migSS=false}}
 /* écriture : attend le serveur s'il répond vite, sinon reste en file d'attente sur l'appareil */
 async function commitSoft(p){
   const r=await Promise.race([p.then(()=>"ok"),new Promise(res=>setTimeout(()=>res("queued"),navigator.onLine?10000:700))]);
@@ -159,7 +170,7 @@ const store={
     return done},
   async saveEtude(doc){return commitSoft(fdb.collection("etudes").doc(doc.id).set({...JSON.parse(JSON.stringify(doc)),createdBy:doc.createdBy||ME.uid}))},
   async deleteEtude(id){return commitSoft(fdb.collection("etudes").doc(id).delete())},
-  async saveSettings(s){if(!isOwner())throw {code:"permission-denied"};const o={};["cm","cc","ct","valid","nego"].forEach(k=>o[k]=+s[k]);return commitSoft(fdb.doc("config/settings").set(o))},
+  async saveSettings(s){if(!isOwner())throw {code:"permission-denied"};const o={};["cm","cc","ct","valid","nego"].forEach(k=>o[k]=+s[k]);o.v2=1;return commitSoft(fdb.doc("config/settings").set(o))},
   async uploadPhoto(blob,temoin){const data=await blobData(blob);if(data.length>990000)throw {code:"too-big"};
     const ref=phCol().doc();await commitSoft(ref.set({data,createdBy:ME.uid,temoin:temoin||"",createdAt:Date.now()}));IMG[ref.id]=data;return ref.id}
 };
@@ -277,7 +288,8 @@ function chipsFor(c){
 }
 function surfLine(c){
   const u=ppmOf(c);const parts=[];
-  if(c.surface)parts.push(h("span",null,fmtS(c.surface)+" m²"+(basisOf(c)==="terrain"&&c.sLand?" terrain":(c.sMezz||c.sCave||c.sTerr?" pond.":""))));
+  if(c.surface){const land=basisOf(c)==="terrain"&&c.sLand,mix=!land&&(c.sMezz||c.sCave||c.sTerr),real=mix?(c.sMain||0)+(c.sMezz||0)+(c.sCave||0)+(c.sTerr||0):0;
+    parts.push(h("span",null,mix?fmtS(real)+" m² réels · "+fmtS(c.surface)+" m² pond.":fmtS(c.surface)+" m²"+(land?" terrain":"")))}
   if(u)parts.push(h("b",{text:" · "+fmt(u)+" "+unitSuf(c.tx)}));
   return h("div",{class:"ppm"},parts.length?parts:"Surface non renseignée");
 }
@@ -418,11 +430,15 @@ function updCalc(fromSurface){
   const p=pondere(),l=fv("sLand"),r=retained();
   const parts=[];
   if(p!=null){const det=[fv("sMain")?plain(fv("sMain")):"",fv("sMezz")?plain(fv("sMezz"))+" × "+plain(S.cm):"",fv("sCave")?plain(fv("sCave"))+" × "+plain(S.cc):"",fv("sTerr")?plain(fv("sTerr"))+" × "+plain(S.ct):""].filter(Boolean).join(" + ");parts.push("Bâti pondéré : "+fmtS(p)+" m² ("+det+")")}
+  const rl=["sMain","sMezz","sCave","sTerr"].map(fv).filter(v=>v!=null);if(rl.length>1)parts.unshift("Surface réelle : "+fmtS(rl.reduce((a,b)=>a+b,0))+" m²");
   if(l!=null)parts.push("Terrain : "+fmtS(l)+" m²");
   $("#surfCalc").replaceChildren(parts.length?h("span",null,parts.join(" · "),h("br"),h("b",{text:"Surface retenue pour le prix au m² : "+(r!=null?fmtS(r)+" m²":"—")})):"Renseigne au moins une surface.");
   if(fromSurface){if(lastEdited==="ppm"&&fv("ppm")!=null&&r)$("#f_price").value=plain(Math.round(fv("ppm")*r));else if(fv("price")!=null&&r)$("#f_ppm").value=plain(Math.round(fv("price")/r))}
   const pr=fv("price");
   $("#priceCalc").textContent=pr!=null?(fmt(pr)+priceSuf(tx)+(r?" · "+fmt(pr/r)+" "+unitSuf(tx):"")+(tx==="Location"&&fv("avance")?" · avance "+fmt(fv("avance"))+" DH":"")+(tx!=="Location"&&fv("loyer")?" · loyer "+fmt(fv("loyer"))+" DH/mois":"")):"Indique le prix total ou le prix au m².";
+  const u0=pr!=null&&r?pr/r:null;
+  if(u0&&basis!=="terrain"&&p!=null&&(fv("sMezz")||fv("sCave")||fv("sTerr"))){const L=[["sMain","Principale",1],["sMezz","Mezzanine",S.cm],["sCave","Sous-sol",S.cc],["sTerr","Terrasse",S.ct]].filter(([k])=>fv(k));
+    $("#priceCalc").append(h("br"),h("small",{text:L.map(([k,n,cf])=>n+" "+fmtS(fv(k))+" m² × "+fmt(u0*cf)+" = "+fmt(fv(k)*u0*cf)).join(" · ")}))}
   const g=coordsFrom($("#f_gps").value);const a=$("#gpsCheck");a.hidden=!g;if(g)a.href=satUrl(g);
 }
 ["sMain","sMezz","sCave","sTerr","sLand"].forEach(k=>$("#f_"+k).addEventListener("input",()=>updCalc(true)));
@@ -494,8 +510,8 @@ function shrink(file,max=1600){return new Promise((res,rej)=>{const img=new Imag
   const cv=document.createElement("canvas");cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
   cv.toBlob(b=>b?res(b):rej(),"image/jpeg",.82);URL.revokeObjectURL(img.src)};img.onerror=rej;img.src=URL.createObjectURL(file)})}
 /* ===================== lecture automatique d’une note ===================== */
-const NUMRE="(\\d[\\d\\s.,]*\\d|\\d)";
-const UNITRE="(mdh|m\\s*dh|millions?\\s*(?:de\\s*)?(?:dh|dirhams?)|m[ei]l+[iy]?ons?|mlyon|mlion|millions?|مليون|dhs?|dirhams?|mad)?";
+const NUMRE="(?<![a-zà-ÿ0-9²])(\\d{1,4}(?:[\\s.,]\\d{3}(?!\\d))+(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)?)";
+const UNITRE="(mdh|m\\s*dh|millions?\\s*(?:de\\s*)?(?:dh|dirhams?)|m[ei]l+[iy]?ons?|mlyon|mlion|millions?|مليون|dhs?|dirhams?|mad|درهم|دراهم)?";
 function amt(n,u){let v=toNum(n);if(!isFinite(v))return null;u=(u||"").trim();
   if(/^(mdh|m\s*dh|millions?\s*(de\s*)?(dh|dirham))/.test(u))return {v:v*1e6};
   if(/^(m[ei]l+[iy]?on|mlyon|mlion|مليون)/.test(u))return {v:v*1e4,note:"« "+n.trim()+" "+u+" » lu en millions de centimes."};
@@ -509,32 +525,56 @@ function smartParse(raw){
   const link=(src.match(/https?:\/\/\S+/)||[""])[0];if(link)out.link=link;
   let t=" "+src.toLowerCase().replace(/https?:\/\/\S+/g," ").replace(/[’`]/g,"'")+" ";
   t=t.replace(/(\d+°\d+'[\d.]+"[ns])\s*(\d+°\d+'[\d.]+"[ew])/g," ").replace(/-?\d{1,2}[.,]\d{4,}\s*[, ]\s*-?\d{1,2}[.,]\d{4,}/g," ").replace(/(?:\+212\s?|\b0)[5-8](?:[\s.-]?\d){8}\b/g," ").replace(/\s+/g," ");
+  t=t.replace(/(\d+(?:[.,]\d+)?)\s*(?:k|mille|alf|ألف|الف|آلاف)(?![a-zà-ÿء-ي])/g,(x,n)=>" "+Math.round(toNum(n)*1000)+" ")
+    .replace(/rez[- ]?de[- ]?chauss[ée]+e?s?|\br\.d\.c\b\.?|الطابق الأرضي|(?:أ|ا)رضي(?![ء-ي])/g," rdc ")
+    .replace(/sous[- ]?sols?|\bs\s*\/\s*sol\b|\bs-sol\b|\bss[- ]sol\b|\bssol\b|الطابق السفلي|تحت (?:أ|ا)رضي|تحت الأرض|قبو/g," soussol ")
+    .replace(/(?:ال)?ميزانين|ميزانيل|(?:ال)?سدة/g," mezz ")
+    .replace(/\s+/g," ");
   const T=[[/\bvilla|demi[- ]villa/,"Villa"],[/\bimmeuble\b/,"Immeuble"],[/\bplateau/,"Plateau de bureaux"],[/\bbureaux?\b/,"Bureau"],[/\bstudio|\bappart|\bapp\b|\bapprt|\bduplex|شقة/,"Appartement"],[/\blocal\b|\blocaux\b|\bmagasin|\bcommerce\b|\bboutique|\bmahal\b|محل/,"Local commercial"],[/\bd[ée]p[ôo]t|\bhangar|\bentrep[ôo]t/,"Entrepôt / dépôt"],[/\busine\b/,"Usine"],[/\bmaison\b|\bdar\b|دار /,"Maison"],[/\briad\b/,"Riad"],[/\bterrain|\blot\b|\bparcelle|\bferme\b|\bhectare|أرض|بقعة/,"Terrain"]];
   out.type=(T.find(([r])=>r.test(t))||[])[1]||null;
   const sar=/\b(sarout|sarrout|sarot|saroute|pas[- ]de[- ]porte|hlaou?ane|hlawan|droit au bail|fonds? de commerce)\b|ساروت/.test(t);
   const rent=/(à|a)\s*lou(er|é|e)\b|\blou(er|é)\b|\blocation\b|par\s*mois|\/\s*mois|\bmensuel|\bkra\b|\bkira\b|lkra|للكراء|كراء/.test(t);
   const sale=/vendre|\bvente\b|\bvendu\b|\bbi3\b|lbi3|للبيع/.test(t);
   out.tx=sar?"Pas-de-porte":(rent&&!sale?"Location":"Vente");
-  const lab=w=>{w=(w||"").replace(/[^a-zàâçéèêëîïôûùüÿœ-]/g,"");if(/^(mzz|mezz|mezan|mz$)/.test(w))return "sMezz";if(/^(cave|sous|ss$|soussol)/.test(w))return "sCave";if(/^(terrass|terass|trs$)/.test(w))return "sTerr";if(/^(terrain|tn$|tf$|lot$|parcelle|ha$)/.test(w))return "sLand";if(/^(rdc|habitable|construit|bâti|bati|couvert|plancher|utile|sh$|sc$|sca$)/.test(w))return "sMain";return null};
-  const toks=[];const re=/(\d+(?:[.,]\d+)?)\s*(m²|m2|mètres?\s*carr[ée]s?|metres?|mtr|m)(?![a-zà-ÿ0-9²])/g;let m;const used=new Set();
-  while((m=re.exec(t))){
-    const pre=t.slice(0,m.index).replace(/\s+$/,""),bPos=pre.lastIndexOf(" ")+1,bWord=pre.slice(bPos);
-    const rest=t.slice(m.index+m[0].length),lead=rest.length-rest.replace(/^\s+/,"").length,aPos=m.index+m[0].length+lead,aWord=rest.trim().split(" ")[0];
-    toks.push({v:toNum(m[1]),bPos,bL:lab(bWord),aPos,aL:lab(aWord),k:null})}
-  toks.forEach((x,i)=>{const nx=toks[i+1];
-    if(x.bL&&!used.has(x.bPos)){x.k=x.bL;used.add(x.bPos)}
-    else if(x.aL&&!(nx&&nx.bPos===x.aPos&&!nx.aL)){x.k=x.aL;used.add(x.aPos)}});
+  /* surfaces : chaque nombre (avec m² ou collé à un mot de niveau) reçoit le mot de niveau le plus proche */
+  const LAB=[["sMezz",/^(mez|mzz|mzn$|mz$)/],["sCave",/^(cave|soussol|sous$|ss$|soubassement|sbt$)/],["sTerr",/^(terrass|terass|trs$)/],["sLand",/^(terrain|tn$|tf$|lot$|parcelle|assiette)/],["sMain",/^(rdc|habitable|construit|bâti|bati|plancher|utile|sh$|sc$|sca$|shon$|principal|plain$)/],["tot",/^(total|totale|globale?)$/]];
+  const lab=w=>{w=(w||"").replace(/[^a-zàâçéèêëîïôûùüÿœ]/g,"");if(!w)return null;const f=LAB.find(([,r])=>r.test(w));return f?f[0]:null};
+  const WD=[...t.matchAll(/[a-zàâçéèêëîïôûùüÿœ]+/g)].map(x=>{const s=x.index,e=s+x[0].length,aft=t.slice(e),bf=t.slice(Math.max(0,s-14),s);
+    return {s,e,k:lab(x[0]),colon:/^\s*:/.test(aft),drop:/^\s*:?\s*(?:oui|non)\b/.test(aft)||/(?:\bsans|\bpas\s*de|\bnon|\baucune?|[ée]tage\s*:?|niveau\s*:?)\s*$/.test(bf)}}).filter(w=>w.k&&!w.drop);
+  const STOP=/^(dhs?|mdh|mad|dirhams?|درهم|دراهم|mois|ans?$|ch$|chambres?|pi[eè]ces?|niveaux?|[ée]tages?|fa[cç]ades?|places?|m[ei]l+[iy]?ons?|millions?|mlyon|mlion|مليون|km|cm|ml|unit|bureaux?|ascenseurs?|salles?|sdb|salons?|appart|magasins?|locaux|portes?|%|x$|×)/;
+  const CN=[];const nre=new RegExp(NUMRE+"\\s*(m²|m2|m[èe]tres?\\s*carr[ée]s?|m[èe]tres?|mtr|m(?![a-zà-ÿ0-9²])|(?:ال)?مترا?ت?(?:\\s*مربعا?)?|أمتار|م²|م2)?","g");let m;
+  while((m=nre.exec(t))){const v=toNum(m[1]);if(!(v>0))continue;const s=m.index,strong=!!m[2],e=strong?s+m[0].length:s+m[1].length,pv=t.slice(Math.max(0,s-24),s);
+    if(!strong){const nx=(t.slice(e).match(/^\s*([^\s\d]+)/)||[])[1]||"";
+      if(v<10||v>=100000||STOP.test(nx)||/^[\/x×*]/.test(nx)||/[x×*+]\s*$/.test(pv.slice(-3))||(v>=1950&&v<2100&&/(?:\ben|ann[ée]e|depuis|date)\s*$/.test(pv)))continue}
+    CN.push({v,s,e,strong,k:null,sub:/\bdont\b[^;]*$/.test(pv),dont:strong&&/^\s*dont\b/.test(t.slice(e))})}
+  const FILL=/^\s*(?:(?:de|d'|en|au|du|des|la|le|l'|à|a|pour|sur)\s*)?$/;
+  const PR=[];WD.forEach((w,wi)=>CN.forEach((c,ci)=>{let d,bef;
+    if(w.e<=c.s){d=c.s-w.e;bef=0}else if(c.e<=w.s){d=w.s-c.e;bef=1}else return;
+    const a=bef?c.e:w.e,b=bef?w.s:c.s,mid=t.slice(a,b);
+    if(bef?(w.colon||!FILL.test(mid)):(d>28||/;/.test(mid)))return;
+    if(CN.some(o=>o!==c&&o.s>=a&&o.e<=b))return;
+    PR.push({d,bef,wi,ci})}));
+  PR.sort((x,y)=>x.d-y.d||x.bef-y.bef);
+  const match=f=>{const got=new Map(),wU=new Set();PR.forEach(p=>{if(!f(p)||got.has(p.ci)||wU.has(p.wi))return;got.set(p.ci,WD[p.wi].k);wU.add(p.wi)});return got};
+  const best=[match(()=>1),match(p=>!p.bef),match(p=>p.bef)].reduce((x,y)=>y.size>x.size?y:x);
+  best.forEach((k,ci)=>CN[ci].k=k);
+  CN.forEach(x=>{if(!x.k&&x.dont)x.k="tot"});
   const hm=t.match(/(\d+(?:[.,]\d+)?)\s*(ha|hectares?)\b/);if(hm)out.sLand=toNum(hm[1])*10000;
-  const landish=LAND_TYPES.includes(out.type);
-  toks.forEach(x=>{if(!(x.v>0))return;const k=x.k||(landish?(out.sLand==null?"sLand":(out.sMain==null?"sMain":null)):(out.sMain==null?"sMain":null));if(k&&out[k]==null)out[k]=x.v});
+  const landish=LAND_TYPES.includes(out.type);let tot=null;
+  CN.forEach(x=>{if(x.k==="tot"){if(tot==null)tot=x.v}else if(x.k&&out[x.k]==null)out[x.k]=x.v});
+  CN.forEach(x=>{if(x.k||!x.strong||x.sub)return;const k=landish?(out.sLand==null?"sLand":(out.sMain==null?"sMain":null)):(out.sMain==null?"sMain":null);if(k&&out[k]==null)out[k]=x.v});
+  if(tot!=null&&out.sMain==null&&out.sLand==null){const oth=(out.sMezz||0)+(out.sCave||0)+(out.sTerr||0);
+    if(!oth){if(landish)out.sLand=tot;else out.sMain=tot}
+    else if(tot>oth){out.sMain=Math.round((tot-oth)*100)/100;out.notes.push("Surface principale déduite : total "+fmt(tot)+" m² moins les autres niveaux (à vérifier).")}}
   const cm=t.match(/(?:construit|b[âa]ti|couvert)\s*:?\s*(\d+(?:[.,]\d+)?)/);if(cm&&out.sMain==null)out.sMain=toNum(cm[1]);
   const tm=t.match(/(?:terrain|superficie terrain)\s*:?\s*(\d+(?:[.,]\d+)?)/);if(tm&&out.sLand==null)out.sLand=toNum(tm[1]);
   const sm=t.match(/(?:superficie|surface|sup)\s*:?\s*(\d+(?:[.,]\d+)?)/);if(sm&&out.sMain==null&&out.sLand==null){if(landish)out.sLand=toNum(sm[1]);else out.sMain=toNum(sm[1])}
-  const per=t.match(new RegExp(NUMRE+"\\s*(?:dhs?|dirhams?)?\\s*(?:\\/\\s*m(?:²|2)?|le\\s*m(?:²|2|ètre|etre)?|par\\s*m(?:²|2|ètre|etre)?)(?![a-z])"));
+  const per=t.match(new RegExp(NUMRE+"\\s*(?:dhs?|dirhams?|درهم|دراهم)?\\s*(?:\\/\\s*m(?:²|2)?|le\\s*m(?:²|2|ètre|etre)?|par\\s*m(?:²|2|ètre|etre)?|(?:ف|ل)?(?:ال|ل)متر)(?![a-z])"));
   if(per)out.ppm=toNum(per[1]);
+  else{const pu=t.match(new RegExp("(?:prix\\s*(?:unitaire|unit\\.?|au\\s*m(?:²|2|ètre|etre)?|du\\s*m(?:²|2|ètre|etre)?|par\\s*m(?:²|2)?|m(?:²|2))|\\bp\\.\\s?u\\b\\.?|\\bpu\\b|ثمن\\s*(?:ديال\\s*)?(?:ال|ل)متر)\\s*[:=]?\\s*(?:de\\s*)?"+NUMRE));if(pu)out.ppm=toNum(pu[1])}
   const sarm=t.match(new RegExp("(?:sarout|sarrout|sarot|saroute|pas[- ]de[- ]porte|hlaou?ane|hlawan|droit au bail|ساروت)\\s*(?:prix|de|:)?\\s*:?\\s*"+NUMRE+"\\s*"+UNITRE));
   let sarV=null;if(sarm){const a=amt(sarm[1],sarm[2]);if(a){sarV=a.v;if(a.note)out.notes.push(a.note)}}
-  const mon=t.match(new RegExp(NUMRE+"\\s*(?:dhs?|dirhams?)?\\s*(?:\\/\\s*mois|par\\s*mois|mois\\b|mensuel)"));
+  const mon=t.match(new RegExp(NUMRE+"\\s*(?:dhs?|dirhams?|درهم|دراهم)?\\s*(?:\\/\\s*mois|par\\s*mois|mois\\b|mensuel|(?:ف|ل)?(?:ال|ل)شهر|شهريا)"));
   const monV=mon?toNum(mon[1]):null;
   const av=t.match(new RegExp(NUMRE+"\\s*(?:dhs?|dirhams?)?\\s*(?:d'|de\\s*)?(?:avance|caution|garantie)"));
   let avV=av?toNum(av[1]):null;
@@ -557,7 +597,7 @@ function smartParse(raw){
     out.price=v;if(monV!=null)out.loyer=monV;
   }
   const fl=t.match(/\b(rdc|rez[- ]de[- ]chauss[ée]e)\b/)?"RDC":(t.match(/\b(\d{1,2})\s*(?:er|ère|eme|ème|e|è)\s*(?:étage|etage|et\b)/)?.[1]);
-  if(fl)out.floor=fl==="RDC"?"RDC":fl+(fl==="1"?"er":"e")+" étage";else if(/sous[- ]sol/.test(t)&&!out.sCave)out.floor="Sous-sol";
+  if(fl)out.floor=fl==="RDC"?"RDC":fl+(fl==="1"?"er":"e")+" étage";else if(/\bsoussol\b/.test(t)&&!out.sCave)out.floor="Sous-sol";
   const ch=t.match(/(\d)\s*(?:ch\b|chambres?|chbr)/),sa=t.match(/(\d)?\s*salons?\b/),sdb=t.match(/(\d)\s*(?:sdb|salles? de bains?)/);
   const rooms=[ch?ch[1]+" ch":"",sa?(sa[1]||"1")+" salon":"",sdb?sdb[1]+" sdb":""].filter(Boolean).join(" + ");if(rooms)out.rooms=rooms;
   if(/\bneuf\b|jamais habit/.test(t))out.state="Neuf";else if(/[àa] r[ée]nover|v[ée]tuste/.test(t))out.state="À rénover";
