@@ -98,9 +98,9 @@ function refStr(n){return "T-"+String(n).padStart(4,"0")}
 function refNum(r){const m=/^T-(\d+)$/.exec(r||"");return m?+m[1]:0}
 
 /* coordonnées privées : téléphones et nom du contact retirés des observations partagées */
-const PHONE1=/(?:\+|00)?212[\s.\-]?(?:\(0\)|0)?[\s.\-]?[5-8](?:[\s.\-]?\d){8}/g,PHONE2=/(^|[^\d.,])0[5-8](?:[\s.\-]?\d){8}(?!\d)/g;
+const PHONE1=/(?:\+|00)?212[\s.\-]?(?:\(0\)|0)?[\s.\-]?[5-8](?:[\s.\-]?\d){8}/g,PHONE2=/(^|[^\d.,])0[5-8](?:[\s.\-]?\d){7,8}(?!\d)/g,PHONE3=/((?:contact|t[ée]l[ée]?phone|t[ée]l|gsm|whatsapp|num[ée]ro)\s*:?\s*)(?:\+?212|0)[\d\s.\-]{6,13}\d/gi;
 const NAME_STOP=new Set(["agence","immo","immobilier","immobiliere","immobilière","promoteur","syndic","gardien","propriétaire","proprietaire","courtier","samsar","contact","bureau","societe","société"]);
-function maskNotes(t,name){t=String(t||"").replace(PHONE1,"[tél. privé]").replace(PHONE2,"$1[tél. privé]");
+function maskNotes(t,name){t=String(t||"").replace(PHONE3,"$1[tél. privé]").replace(PHONE1,"[tél. privé]").replace(PHONE2,"$1[tél. privé]");
   const words=String(name||"").replace(/\b(m|mr|mme|mlle|monsieur|madame|si|sidi|lalla)\b\.?/gi," ").split(/[\s\/,;]+/).filter(w=>w.length>=4&&!/\d/.test(w)&&!NAME_STOP.has(w.toLowerCase()));
   const full=String(name||"").trim();const pats=[full,...words].filter(w=>w.length>=4).map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"));
   if(pats.length)t=t.replace(new RegExp("(?:"+pats.join("|")+")","gi"),"[contact privé]");
@@ -612,6 +612,29 @@ function smartParse(raw){
   if(/\bneuf\b|jamais habit/.test(t))out.state="Neuf";else if(/[àa] r[ée]nover|v[ée]tuste/.test(t))out.state="À rénover";
   if(/haut standing/.test(t))out.standing="Haut standing";else if(/moyen standing/.test(t))out.standing="Moyen standing";else if(/[ée]conomique/.test(t))out.standing="Économique";
   if(out.gps){const c=guessCity(coordsFrom(out.gps));if(c)out.city=c}
+  /* fiches écrites « Étiquette : valeur » (Ville :, Quartier :, Contact :, Etage :, Ch :, Balcon :…) */
+  const LBL=re=>{const m=src.match(re);return m?m[1].trim():""},EMPTY=v=>!v||/^[-–—_.\s?]*$/.test(v);
+  const cap=v=>v.toLowerCase().replace(/(^|[\s'’-])([a-zà-ÿ])/g,(x,a,b)=>a+b.toUpperCase());
+  const vil=LBL(/(?:^|\n|;)[ \t]*villes?[ \t]*:[ \t]*([^\n;]*)/i);if(!EMPTY(vil))out.city=cap(vil);
+  const qua=LBL(/(?:^|\n|;)[ \t]*(?:quartiers?|hay|secteur)[ \t]*:[ \t]*([^\n;]*)/i);if(!EMPTY(qua))out.district=cap(qua);
+  const adr=LBL(/(?:^|\n|;)[ \t]*(?:adresse|rue)[ \t]*:[ \t]*([^\n;]*)/i);if(!EMPTY(adr))out.address=adr;
+  const ctc=src.match(/(?:contact|t[ée]l[ée]?phone|t[ée]l|gsm|whatsapp|num[ée]ro)[ \t]*:?[ \t]*((?:\+?212|0)[\d \t.\-]{6,13}\d)/i);
+  if(ctc&&!out.contactTel){const d=ctc[1].replace(/[\s.\-]/g,"").replace(/^\+?212/,"0");
+    if(d.length===10)out.contactTel=d.replace(/(\d{4})(\d{2})(\d{2})(\d{2})/,"$1 $2 $3 $4");
+    else if(d.length>=8&&d.length<10){out.contactTel=d;out.notes.push("Numéro de contact incomplet ("+d.length+" chiffres) : à vérifier.")}}
+  const eta=LBL(/(?:^|\n|;)[ \t]*[ée]tage[ \t]*:[ \t]*([^\n;]*)/i);
+  const fm=eta.match(/^(?:(rdc|rez[- ]de[- ]chauss[ée]e|r\s*\+?\s*0)|(\d+)\s*(?:er|ère|re|e|ème|eme|è)?)\s*(?:[ée]tage)?\s*\.?$/i);
+  if(fm)out.floor=fm[1]?"RDC":(fm[2]==="0"?"RDC":fm[2]==="1"?"1er étage":fm[2]+"e étage");
+  const nbe=LBL(/(?:^|\n|;)[ \t]*(?:nb|nombre)\.?[ \t]*(?:d['’][ \t]*)?[ée]tages?[ \t]*:[ \t]*([^\n;]*)/i)||(fm?"":eta),rpl=nbe.match(/r\s*\??\s*\+\s*(\d+)/i);
+  if(rpl)out.notes.push("Immeuble R+"+rpl[1]+".");
+  const cnt=re=>{const v=LBL(re);const n=v.match(/^(\d+)/);return n?+n[1]:null};
+  const nCh=cnt(/(?:^|\n|;)[ \t]*(?:ch|chambres?|chbr)[ \t]*:[ \t]*([^\n;]*)/i),nSa=cnt(/(?:^|\n|;)[ \t]*salons?[ \t]*:[ \t]*([^\n;]*)/i),nSdb=cnt(/(?:^|\n|;)[ \t]*(?:sdb|salles? de bains?)[ \t]*:[ \t]*([^\n;]*)/i);
+  if(nCh!=null||nSa!=null||nSdb!=null)out.rooms=[nCh!=null?nCh+" ch":"",nSa?nSa+" salon":"",nSdb?nSdb+" sdb":""].filter(Boolean).join(" + ");
+  const yn=(re,lab)=>{const v=LBL(re).toLowerCase();if(/^(non|no|sans|0)\b/.test(v))return "sans "+lab;if(/^(oui|yes|avec|\d)/.test(v))return "avec "+lab;return ""};
+  const eq=[yn(/(?:^|\n|;)[ \t]*balcons?[ \t]*:[ \t]*([^\n;]*)/i,"balcon"),yn(/(?:^|\n|;)[ \t]*(?:parking|garage)[ \t]*:[ \t]*([^\n;]*)/i,"parking"),yn(/(?:^|\n|;)[ \t]*ascenseurs?[ \t]*:[ \t]*([^\n;]*)/i,"ascenseur")].filter(Boolean);
+  if(eq.length)out.notes.push(eq.join(", ").replace(/^./,x=>x.toUpperCase())+".");
+  const cour=t.match(/(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m)?\s*(?:de\s*)?cour\b/);if(cour)out.notes.push("Cour : "+cour[1]+" m² (non comptée dans la surface).");
+  if(/(?:^|\n)[ \t]*angle\b/i.test(src)&&!out.address)out.notes.push("Situé à l’angle.");
   if(out.ppm)out.notes.unshift("Prix demandé : "+fmt(out.ppm)+" DH/m².");
   if(/vendu/.test(t))out.notes.push("Signalé vendu.");
   return out;
@@ -631,7 +654,7 @@ function applyParsed(p,src,label){
   if(p.state&&STATES.includes(p.state))setV("state",p.state,"état");if(p.standing&&STANDINGS.includes(p.standing))setV("standing",p.standing,"standing");
   setV("link",p.link,"lien");setV("contactName",p.contactName,"contact");
   if(src){const cur=$("#f_notes").value.trim();const add=[...(p.notes||[]),"Note d’origine : "+src.replace(/\s*\n\s*/g," ; ")].join(" ");if(!cur.includes(src.slice(0,40)))$("#f_notes").value=(cur?cur+"\n":"")+add}
-  updCalc();
+  updCalc();if(coordsFrom($("#f_gps").value))temGeocode();
   $("#qStatus").textContent=filled.length?label+" : "+[...new Set(filled)].join(", ")+". Vérifie la fiche avant d’enregistrer."+(p.flag?" Attention : un montant est à vérifier.":""):"Rien n’a été reconnu dans ce texte. Remplis la fiche à la main ou essaie l’analyse avec Claude.";
 }
 $("#qFill").onclick=()=>{const s=$("#qText").value.trim();if(!s){toast("Colle d’abord une note.");return}applyParsed(smartParse(s),s,"Rempli automatiquement")};
@@ -1805,3 +1828,5 @@ function fillAuthorSel(sel,list){const e=$(sel);if(!e)return;const m=new Map();l
   const opts=[["","Tout le monde"],...(m.has(ME.uid)?[[ME.uid,"Moi"]]:[]),...others];const sig=opts.map(o=>o.join("=")).join("|");
   if(e.dataset.sig!==sig){e.replaceChildren(...opts.map(([v,t])=>h("option",{value:v,text:t})));e.dataset.sig=sig}
   e.value=opts.some(o=>o[0]===cur)?cur:""}
+
+$("#f_gps").addEventListener("change",()=>{if(coordsFrom($("#f_gps").value))temGeocode()});
