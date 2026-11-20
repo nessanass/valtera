@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261119220120">
+<link rel="stylesheet" href="style.css?v=20261120103825">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -169,8 +169,8 @@
 
 <section class="gut vis" id="visitesView" hidden>
   <div class="in">
-    <div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Remplies sur place, reliées aux témoins par leur référence T-…, imprimables en PDF.</p></div><button class="btn pri" type="button" id="visAdd">+ Nouvelle fiche</button></div>
-    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Réf. V-0001, dossier, ville, quartier, contact…" aria-label="Rechercher une fiche"><span class="meta" id="visCount"></span></div>
+    <div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Fiche de visite, fiche terrain et état d’avancement : remplies sur place, téléchargées en PDF.</p></div><button class="btn pri" type="button" id="visAdd">+ Nouvelle fiche</button></div>
+    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Dossier, ville, quartier, contact…" aria-label="Rechercher une fiche"><select id="visKindF" aria-label="Type de fiche"><option value="">Tous les types</option><option value="bien">Bâti</option><option value="terrain">Terrain</option><option value="avancement">État d’avancement</option></select><span class="meta" id="visCount"></span></div>
     <div class="vlist" id="visList"></div>
   </div>
 </section>
@@ -392,6 +392,14 @@
     <button class="btn" id="visCopy" type="button">Copier le texte</button><button class="btn" id="visTemoin" type="button" hidden>Créer un témoin</button><button class="btn" id="visShare" type="button" data-share="1" hidden>Partager</button><button class="btn" id="visPdf" type="button">Télécharger (PDF)</button><button class="btn pri" id="visSave" type="button">Enregistrer</button></div>
 </dialog>
 <div id="printArea" aria-hidden="true"></div>
+<dialog id="kindDlg">
+  <div class="dh"><div><h2>Nouvelle fiche</h2><div class="meta">Choisis le type de fiche.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db kinds">
+    <button type="button" class="kindopt" data-kind="bien"><b>Fiche de visite</b><span class="meta">Appartement, villa, maison, local commercial, usine</span></button>
+    <button type="button" class="kindopt" data-kind="terrain"><b>Fiche de visite : Terrain</b><span class="meta">Destination, viabilité, topographie, voie d’accès, servitudes</span></button>
+    <button type="button" class="kindopt" data-kind="avancement"><b>État d’avancement</b><span class="meta">Avancement des travaux par lot et sous-lot, avancement global</span></button>
+  </div>
+</dialog>
 <dialog id="pickDlg" class="wide">
   <div class="dh"><div><h2>Choisir le point sur la carte</h2><div class="meta">Déplace la carte avec le doigt : le point au centre de la croix sera enregistré.</div></div><button class="btn" type="button" id="pickCancel">Annuler</button></div>
   <div class="pickwrap"><div id="pickMap" role="application" aria-label="Carte satellite pour choisir un point"></div><div class="pickcross" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 44 44"><g fill="none" stroke-linecap="round"><g stroke="#000" stroke-opacity=".55" stroke-width="4.5"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g><g stroke="#fff" stroke-width="2"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g></g><circle cx="22" cy="22" r="2.2" fill="#e9a948" stroke="#000" stroke-width=".8"/></svg></div></div>
@@ -417,7 +425,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261119220120"></script>
-<script src="app.js?v=20261119220120"></script>
+<script src="config.js?v=20261120103825"></script>
+<script src="app.js?v=20261120103825"></script>
 </body>
 </html>

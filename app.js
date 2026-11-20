@@ -918,7 +918,7 @@ function mapClickPopup(ll){const g=[+ll.lat.toFixed(6),+ll.lng.toFixed(6)],s=gps
   const el=h("div",{class:"mc-pop"},h("div",{class:"num",text:s}),h("div",{class:"acts"},
     canAdd()?h("button",{class:"btn sm pri",type:"button",text:"Nouveau témoin ici",onclick:()=>{map.closePopup();openForm();$("#f_gps").value=s;$("#f_gps").dispatchEvent(new Event("input"))}}):null,
     h("button",{class:"btn sm",type:"button",text:"Comparables autour",onclick:()=>{map.closePopup();$("#near").value=s;if(!$("#radius").value)$("#radius").value="500";$("#filters").hidden=false;shown=0;mv=null;render()}}),
-    canVisites()?h("button",{class:"btn sm",type:"button",text:"Fiche de visite ici",onclick:()=>{map.closePopup();openVisite(null,{gps:s});autoPlace()}}):null,
+    canVisites()?h("button",{class:"btn sm",type:"button",text:"Fiche de visite ici",onclick:()=>{map.closePopup();chooseKind({gps:s})}}):null,
     h("button",{class:"btn sm",type:"button",text:"Copier",onclick:e=>copyText(s,e.target)})));
   L.popup({maxWidth:300}).setLatLng(ll).setContent(el).openOn(map)}
 function showOnMap(c){const g=gpsOf(c);if(!g){toast("Cette fiche n’a pas de position GPS.");return}
@@ -1030,7 +1030,7 @@ let visites=[],visEditing=null,visPhotos=[],visRefs=[],visDelArmed=false,visQ=""
 function canVisites(){return isOwner()||(ME.modules.includes("visites")&&ME.role==="collab")}
 const CH={on:["Oui","Non"],bmf:["B","M","F"]};
 const TYPO_SUB={"Maison":["Unifamiliale","Multifamiliale"],"Villa":["Isolée","En bande","Jumelée"],"Local commercial":["Avec accès rue","Sans accès rue"]};
-const VIS_SECTIONS=[
+const SEC_BIEN=[
  {t:"Dossier et adresse",f:[["dossier","Numéro du dossier"],["date","Date de la visite","date"],["visiteur","Visiteur"],["contact","Contact (personne rencontrée)"],["contactTel","Téléphone du contact","tel"],
    ["gps","Coordonnées","gps"],["ville","Ville"],["quartier","Quartier"],["commune","Municipalité / Commune"],["rue","Rue","text",2],["residence","Résidence"],["num","N°"],["ilot","Îlot"],["porte","Porte"],["etage","Étage"],["codePostal","Code postal"],
    ["orientation","Orientation","chips",["Nord","Sud","Est","Ouest","Nord-Est","Nord-Ouest","Sud-Est","Sud-Ouest"]]]},
@@ -1047,8 +1047,42 @@ const VIS_SECTIONS=[
  {t:"Valeur et références",refs:true,f:[["valeur","Valeur du bien estimée (DH)","num"]]},
  {t:"Remarques",f:[["remarques","Remarques","area",null,3]]}
 ];
-const VIS_FIELDS=VIS_SECTIONS.flatMap(s=>s.f);
-const VIS_PH={nEtages:"ex. R+3",nAsc:"ex. 2, 0 ou —",nBureaux:"ex. 4 ou —",age:"ex. 15 ans"};
+const ORIENT=["Nord","Sud","Est","Ouest","Nord-Est","Nord-Ouest","Sud-Est","Sud-Ouest"];
+const EQ_FIELDS=[["eqCommercial","Commercial","chips",CH.bmf],["eqLoisirs","Loisirs","chips",CH.bmf],["eqScolaire","Scolaire","chips",CH.bmf],["eqSante","Santé","chips",CH.bmf],["eqSportif","Sportif","chips",CH.bmf],["eqReligieux","Religieux","chips",["Suffisant","Insuffisant"]],["eqBus","Bus","chips",CH.on]];
+const HEAD_COMMON=[["dossier","Numéro du dossier"],["date","Date de la visite","date"],["visiteur","Visiteur"],["contact","Contact (personne rencontrée)"],["contactTel","Téléphone du contact","tel"],
+  ["gps","Coordonnées","gps"],["ville","Ville"],["quartier","Quartier"],["commune","Municipalité / Commune"],["rue","Rue","text",2],["num","N°"],["codePostal","Code postal"]];
+const SEC_TERRAIN=[
+ {t:"Dossier et adresse",f:[...HEAD_COMMON,["orientation","Orientation","chips",ORIENT]]},
+ {t:"Destination",f:[["destination","Destination","multi",["Terrain agricole","Terrain constructible","Maison","Villa","Usine","Immeuble","TR agricole","Autre"]],["implantation","Implantation","chips",["Isolé","En bande","Jumelée"]],["zone","Zone","chips",["Zone urbaine","Zone rurale"]],
+   ["sTerrain","Superficie du terrain (m²)","num"],["precision","Précision","area",null,2]]},
+ {t:"Équipement du quartier",note:"B bon · M moyen · F faible",f:EQ_FIELDS},
+ {t:"Viabilité",f:[["eau","Eau","multi",["Réseau général","Puits"]],["elec","Électricité","multi",["Public","Privé"]],["assain","Assainissement","multi",["Réseau général","FS"]],["voirie","Voirie","multi",["Goudronnée","Piste"]]]},
+ {t:"Topographie du terrain",f:[["topo","Topographie","multi",["Terrain plat","Terrain en pente","Terrain en relief","Dénivelé important"]]]},
+ {t:"Voie d’accès",f:[["acces","Voie d’accès","multi",["Goudronnée","Non goudronnée","Publique","Privée"]],["distance","Distance","text",null,2]]},
+ {t:"Servitudes / charges urbanistiques",f:[["servitudes","Servitudes grevant le terrain","multi",["Ligne haute tension / Ligne électrique","Servitude de passage","Oued / Khatara","Voie d'aménagement","Voie ferrée","Autre"]],["servAutre","Autre servitude","text",null,2]]},
+ {t:"Nuisances",f:[["nuisances","Nuisances","multi",["Nuisances sonores","Nuisance olfactive (décharge…)","Autre"]],["nuisAutre","Autre nuisance","text",null,2]]},
+ {t:"Valeur et étude de marché",refs:true,f:[["valeur","Valeur du bien estimée (DH)","num"],["etude","Étude de marché & transactions","multi",["Étude de marché complète","Étude de marché incomplète","Témoins introduits dans la carte","Étude des transactions effectuée"]],["codesAutres","Autres codes témoins (SAX…)","text",null,2]]},
+ {t:"Documents",f:[["docs","Documents disponibles lors de la visite","multi",["C.P","P.C","N.R","C. des charges","P. autorisé","Autre"]],["docsAutre","Autre document"]]},
+ {t:"Constructions sur le terrain",f:[["constructions","Description (type – date de construction)","area",null,2]]},
+ {t:"Remarques",f:[["remarques","Remarques","area",null,3]]}
+];
+const SEC_AVANC=[
+ {t:"Dossier et adresse",f:[...HEAD_COMMON,["typeBien","Type de bien / projet","text",null,2]]},
+ {t:"Avancement des travaux",lots:true,note:"Pour chaque sous-lot, mets le % d’avancement. Les % par lot (ou, à défaut, les budgets) servent à calculer l’avancement global.",f:[]},
+ {t:"Remarques",f:[["remarques","Remarques","area",null,3]]}
+];
+const KINDS={bien:{label:"Fiche de visite",nouv:"Nouvelle fiche de visite",sec:SEC_BIEN},terrain:{label:"Fiche de visite : Terrain",nouv:"Nouvelle fiche de visite : Terrain",sec:SEC_TERRAIN},avancement:{label:"État d’avancement",nouv:"Nouvel état d’avancement",sec:SEC_AVANC}};
+const LOTS_DEF=[["Gros œuvres",["Terrassement généraux","Assainissement","Fondations (Béton, voiles)","Béton en élévation","Maçonnerie","Enduits extérieurs","Enduits intérieurs","Etanchéité","Piscine"]],
+  ["Revêtement",["Revêtement sol intérieur","Revêtement plafond","Revêtement Murs","Revêtement Piscine"]],["Menuiserie Aluminium",["Aluminium"]],
+  ["Menuiserie Bois",["Portes","Placard et Meubles Sanitaires","Cuisine"]],["Menuiserie Métallique",["Portes et Portails extérieurs"]],["Peinture",["Peinture intérieur","Peinture extérieur"]],
+  ["Electricité",["Tuyauterie","Câblage et Tableaux électriques","Appareillage et Lustrerie"]],["Plomberie",["Descentes et évacuation EP EU","Alimentation et tableaux de distribution","Mecanismes de sanitaires"]],
+  ["Climatisation",["Préinstallations","Conduites et unité de Climatisation"]],["Divers",["Aménagements Extérieurs (Dallage, espace vert, mur de cloture etc)"]]];
+let visKind="bien";
+const kindOf=v=>KINDS[v?.kind]?v.kind:"bien";
+const secsOf=k=>KINDS[k||visKind].sec;
+const fieldsOf=k=>secsOf(k).flatMap(s=>s.f);
+
+const VIS_PH={nEtages:"ex. R+3",nAsc:"ex. 2, 0 ou —",nBureaux:"ex. 4 ou —",age:"ex. 15 ans",distance:"ex. RN9 : 1 km – P3015 : 750 m",typeBien:"ex. Villa R+1 avec piscine",codesAutres:"ex. 111647 + 111648"};
 const ROOM_DEF=["Séjour","Chambres","Cuisine","SDB / WC"];
 const visCol=()=>fdb.collection("visites");
 function visRefStr(n){return "V-"+String(n).padStart(4,"0")}
@@ -1068,22 +1102,26 @@ async function assignVisRef(id){const cRef=fdb.doc("counters/visites"),vRef=visC
     const n=(c.data().n||0)+1;t.update(cRef,{n});t.update(vRef,{ref:visRefStr(n)})})}
 
 /* ---------- liste ---------- */
-function visTitle(v){return [v.typo,v.typoSub].filter(Boolean).join(" · ")||"Bien à préciser"}
+function visTitle(v){const k=kindOf(v);
+  if(k==="terrain")return "Terrain"+((v.destination||[]).length?" · "+v.destination.join(", "):"")+(v.sTerrain?" · "+plain(v.sTerrain)+" m²":"");
+  if(k==="avancement"){const r=avCalc(v.lots||[]);return "État d’avancement"+(v.typeBien?" · "+v.typeBien:"")+(r.global!=null?" · "+Math.round(r.global)+" %":"")}
+  return [v.typo,v.typoSub].filter(Boolean).join(" · ")||"Bien à préciser"}
 function visAddr(v){return [[v.residence,v.num&&("N° "+v.num),v.rue].filter(Boolean).join(", "),[v.quartier,v.ville].filter(Boolean).join(", ")].filter(Boolean).join(" – ")}
 function renderVisites(){
   const L=$("#visList");L.innerHTML="";const q=visQ.trim().toLowerCase();
-  const r=visites.filter(v=>!q||[v.ref,v.dossier,v.ville,v.quartier,v.rue,v.residence,v.typo,v.contact,v.visiteur,v.remarques].join(" ").toLowerCase().includes(q))
+  const kf=$("#visKindF").value;const r=visites.filter(v=>(!kf||kindOf(v)===kf)&&(!q||[v.ref,v.dossier,v.ville,v.quartier,v.rue,v.residence,v.typo,v.typeBien,(v.destination||[]).join(" "),KINDS[kindOf(v)].label,v.contact,v.visiteur,v.remarques].join(" ").toLowerCase().includes(q)))
     .sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
   $("#visCount").textContent=visites.length?visites.length+" fiche"+(visites.length>1?"s":""):"";
   if(!r.length){L.append(h("div",{class:"empty"},h("b",{text:visites.length?"Aucune fiche ne correspond.":"Aucune fiche de visite pour l’instant."}),h("p",{class:"meta",text:visites.length?"Change la recherche.":"Sur place, appuie sur « + Nouvelle fiche » : la date, le visiteur, la position GPS, la ville et le quartier se remplissent tout seuls, et Valtera propose les témoins proches comme éléments de référence."})));return}
   r.forEach(v=>{const done=v.status==="terminee";
     L.append(h("article",{class:"vcard",onclick:()=>openVisite(v)},
-      h("div",{class:"vtop"},h("span",{class:"num vref",text:v.ref||"V-…"}),h("span",{class:"chip "+(done?"st-ok":"st-warn"),text:done?"Terminée":"Brouillon"}),v.dossier?h("span",{class:"meta",text:"Dossier "+v.dossier}):null),
+      h("div",{class:"vtop"},h("span",{class:"num vref",text:v.ref||"V-…"}),h("span",{class:"chip kchip",text:kindOf(v)==="bien"?"Bâti":kindOf(v)==="terrain"?"Terrain":"Avancement"}),h("span",{class:"chip "+(done?"st-ok":"st-warn"),text:done?"Terminée":"Brouillon"}),v.dossier?h("span",{class:"meta",text:"Dossier "+v.dossier}):null),
       h("div",{class:"vt",text:visTitle(v)}),
       h("div",{class:"meta",text:visAddr(v)||"Adresse à compléter"}),
       h("div",{class:"meta",text:[v.date?new Date(v.date).toLocaleDateString("fr-FR"):"",v.visiteur,v.valeur?fmt(v.valeur)+" DH":"",(v.refs||[]).length?(v.refs.length+" référence"+(v.refs.length>1?"s":"")):""].filter(Boolean).join(" · ")}),
       h("div",{class:"acts",style:"padding:4px 0 0"},h("button",{class:"btn sm",type:"button",text:"Télécharger (PDF)",onclick:e=>{e.stopPropagation();downloadVisitePdf(v,e.currentTarget)}}))))})}
 $("#visSearch").addEventListener("input",e=>{visQ=e.target.value;renderVisites()});
+$("#visKindF").addEventListener("change",renderVisites);
 
 /* ---------- formulaire ---------- */
 function chipsEl(key,opts,multi){const d=h("div",{class:"chips","data-k":key,role:"group"});
@@ -1091,7 +1129,7 @@ function chipsEl(key,opts,multi){const d=h("div",{class:"chips","data-k":key,rol
     if(!multi)d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed",on?"true":"false");if(key==="typo")updTypoSub()}})));return d}
 function buildVisForm(){
   const B=$("#visBody");B.innerHTML="";
-  VIS_SECTIONS.forEach(s=>{const fs=h("fieldset",null,h("legend",{text:s.t}));if(s.note)fs.append(h("p",{class:"note",text:s.note}));
+  secsOf().forEach(s=>{const fs=h("fieldset",null,h("legend",{text:s.t}));if(s.note)fs.append(h("p",{class:"note",text:s.note}));
     const g=h("div",{class:"fgrid"});
     s.f.forEach(([k,l,type="text",opts,span])=>{
       if(type==="chips"||type==="multi"){g.append(h("div",{class:"fchips s-all"},h("span",{class:"lbl",text:l}),chipsEl(k,opts||[],type==="multi")));return}
@@ -1101,6 +1139,7 @@ function buildVisForm(){
       g.append(h("label",{class:span===2?"s2":null},l,h("input",{id:"v_"+k,type:type==="num"?"text":type,inputmode:type==="num"?"decimal":null,autocomplete:"off",placeholder:VIS_PH[k]||null})))});
     fs.append(g);
     if(s.rooms){fs.insertBefore(h("div",{class:"rooms"},h("div",{class:"tblwrap flat"},h("table",{class:"t",id:"vRooms"})),h("button",{class:"btn sm",type:"button",text:"+ Ajouter une pièce",onclick:()=>{addRoom({});}})),g)}
+    if(s.lots){fs.append(h("div",{class:"lots",id:"vLots"}),h("div",{class:"lotfoot"},h("button",{class:"btn sm",type:"button",text:"+ Ajouter un lot",onclick:()=>{addLot({lot:"",sous:[{n:""}]});updAv()}}),h("div",{class:"avglob",id:"vAvGlob"})))}
     if(s.refs){fs.append(h("div",{class:"refs"},h("div",{class:"refhead"},h("b",{text:"Éléments de référence"}),h("span",{class:"meta",id:"vRefInfo"})),
       h("div",{class:"tblwrap flat"},h("table",{class:"t",id:"vRefTbl"})),
       h("div",{class:"acts",style:"padding:0"},h("button",{class:"btn sm",type:"button",text:"Proposer les témoins proches",onclick:proposeRefs}),h("button",{class:"btn sm",type:"button",text:"Ajouter par référence (T-…)",onclick:addRefByCode})),
@@ -1118,23 +1157,57 @@ function addRoom(r){const T=$("#vRooms");if(!T.tHead)T.append(h("thead",null,h("
   const tr=h("tr",{style:"cursor:default"},...["piece","sol","murs","plafond","menuiserie"].map(k=>h("td",null,h("input",{"data-r":k,value:r[k]||"","aria-label":k}))),
     h("td",null,h("button",{class:"btn sm",type:"button",text:"✕","aria-label":"Retirer la pièce",onclick:()=>tr.remove()})));T.tBodies[0].append(tr)}
 function readRooms(){return [...$$("#vRooms tbody tr")].map(tr=>{const o={};tr.querySelectorAll("input").forEach(i=>o[i.dataset.r]=i.value.trim());return o}).filter(o=>Object.values(o).some(Boolean))}
+/* ---------- état d'avancement : lots et sous-lots ---------- */
+const pctIn=x=>{const n=numIn(x);return n==null?null:Math.max(0,n)};
+function avCalc(lots){const out=[];
+  lots.forEach(lt=>{const ss=(lt.sous||[]).filter(x=>x.n||x.av!=null);if(!ss.length){out.push({av:null});return}
+    const useW=ss.some(x=>x.pct>0),W=ss.map(x=>useW?(x.pct||0):1),sw=W.reduce((a,b)=>a+b,0);
+    const any=ss.some(x=>x.av!=null);out.push({av:any&&sw?ss.reduce((a,x,i)=>a+W[i]*(x.av||0),0)/sw:null})});
+  const ok=lots.map((lt,i)=>({lt,av:out[i].av})).filter(x=>x.av!=null);if(!ok.length)return {lots:out,global:null,basis:""};
+  let basis="pct",w=ok.map(x=>x.lt.pct||0);if(!w.some(x=>x>0)){basis="budget";w=ok.map(x=>x.lt.budget||0)}if(!w.some(x=>x>0)){basis="egal";w=ok.map(()=>1)}
+  const sw=w.reduce((a,b)=>a+b,0);return {lots:out,global:ok.reduce((a,x,i)=>a+w[i]*x.av,0)/sw,basis}}
+function addLot(lt){const box=$("#vLots");
+  const el=h("div",{class:"lot"});
+  const head=h("div",{class:"lothead"},h("input",{class:"lotname",value:lt.lot||"",placeholder:"Nom du lot","aria-label":"Lot"}),
+    h("label",{class:"mini"},"% du lot",h("input",{"data-f":"pct",inputmode:"decimal",value:lt.pct!=null?plain(lt.pct):"",placeholder:"—"})),
+    h("label",{class:"mini"},"Budget (DH)",h("input",{"data-f":"budget",inputmode:"decimal",value:lt.budget!=null?plain(lt.budget):"",placeholder:"—"})),
+    h("span",{class:"lotav num"}),h("button",{class:"btn sm",type:"button",text:"✕","aria-label":"Retirer le lot",onclick:()=>{el.remove();updAv()}}));
+  const rows=h("div",{class:"sous"});
+  el.append(head,rows,h("button",{class:"linkbtn",type:"button",text:"+ Sous-lot",onclick:()=>{addSous(rows,{});updAv()}}));
+  (lt.sous&&lt.sous.length?lt.sous:[{}]).forEach(x=>addSous(rows,x));box.append(el)}
+function addSous(rows,x){const r=h("div",{class:"srow"});
+  const rng=h("input",{type:"range",min:0,max:100,step:5,value:x.av!=null?x.av:0,"aria-label":"Avancement"}),num=h("input",{class:"avn",inputmode:"decimal",value:x.av!=null?plain(x.av):"",placeholder:"%","aria-label":"Avancement en %"});
+  rng.classList.toggle("unset",x.av==null);
+  rng.addEventListener("input",()=>{num.value=rng.value;rng.classList.remove("unset");updAv()});num.addEventListener("input",()=>{const n=pctIn(num.value);if(n!=null){rng.value=Math.min(100,n);rng.classList.remove("unset")}else rng.classList.add("unset");updAv()});
+  r.append(h("input",{class:"sname",value:x.n||"",placeholder:"Sous-lot","aria-label":"Sous-lot"}),h("label",{class:"mini"},"% sous-lot",h("input",{"data-f":"spct",inputmode:"decimal",value:x.pct!=null?plain(x.pct):"",placeholder:"—"})),
+    h("div",{class:"avbox"},rng,num,h("span",{class:"meta",text:"%"})),h("button",{class:"btn sm",type:"button",text:"✕","aria-label":"Retirer le sous-lot",onclick:()=>{r.remove();updAv()}}));rows.append(r)}
+function lotFromEl(el){return {lot:el.querySelector(".lotname").value.trim(),pct:pctIn(el.querySelector('[data-f="pct"]').value),budget:pctIn(el.querySelector('[data-f="budget"]').value),
+  sous:[...el.querySelectorAll(".srow")].map(r=>({n:r.querySelector(".sname").value.trim(),pct:pctIn(r.querySelector('[data-f="spct"]').value),av:pctIn(r.querySelector(".avn").value)})).filter(x=>x.n||x.av!=null)}}
+function readLots(){return [...$$("#vLots .lot")].map(lotFromEl).filter(l=>l.lot||l.sous.length)}
+function updAv(){$$("#vLots .lot").forEach(el=>{const av=avCalc([lotFromEl(el)]).lots[0].av;el.querySelector(".lotav").textContent=av!=null?Math.round(av)+" %":"—"});
+  const r=avCalc(readLots()),g=$("#vAvGlob");if(!g)return;g.replaceChildren(h("span",{class:"meta",text:"Avancement global"}),h("b",{class:"num",text:r.global!=null?Math.round(r.global)+" %":"—"}),
+    h("span",{class:"meta",text:r.basis==="pct"?"pondéré par les % des lots":r.basis==="budget"?"pondéré par les budgets":r.basis==="egal"?"lots comptés à égalité (mets les % par lot ou les budgets pour pondérer)":""}))}
+$("#visBody").addEventListener("input",e=>{if(e.target.closest("#vLots"))updAv()});
+
 function openVisite(v,preset){
   if(!canVisites()){toast(errMsg({code:"permission-denied"}));return}
   visEditing=v||null;visDelArmed=false;$("#visDel").classList.remove("arm");$("#visDel").textContent="Supprimer";
-  buildVisForm();const d=v||{date:new Date().toISOString().slice(0,10),visiteur:ME.name,pieces:ROOM_DEF.map(p=>({piece:p})),...(preset||{})};
-  VIS_FIELDS.forEach(([k,l,type])=>{if(type==="chips"||type==="multi"){if(k!=="typoSub")setChips(k,d[k]||(type==="multi"?[]:""));return}const e=$("#v_"+k);if(e)e.value=d[k]!=null?(type==="num"?plain(d[k]):d[k]):""});
-  updTypoSub(d.typoSub||"");(d.pieces||[]).forEach(addRoom);if(!(d.pieces||[]).length)ROOM_DEF.forEach(p=>addRoom({piece:p}));
-  visPhotos=[...(d.photos||[])];renderVisThumbs();visRefs=[...(d.refs||[])];renderRefs();$("#vRefPick").innerHTML="";
-  $("#visTitle").textContent=v?(v.ref||"Fiche de visite")+(v.dossier?" · dossier "+v.dossier:""):"Nouvelle fiche de visite";
-  $("#visDone").checked=d.status==="terminee";$("#visDel").hidden=!v||!isOwner();$("#visTemoin").hidden=!v;$("#visNote").textContent="";
+  visKind=v?kindOf(v):(KINDS[preset?.kind]?preset.kind:"bien");
+  buildVisForm();const d=v||{date:new Date().toISOString().slice(0,10),visiteur:ME.name,...(visKind==="bien"?{pieces:ROOM_DEF.map(p=>({piece:p}))}:{}),...(visKind==="avancement"?{lots:LOTS_DEF.map(([lot,ss])=>({lot,sous:ss.map(n=>({n}))}))}:{}),...(preset||{})};
+  fieldsOf().forEach(([k,l,type])=>{if(type==="chips"||type==="multi"){if(k!=="typoSub")setChips(k,d[k]||(type==="multi"?[]:""));return}const e=$("#v_"+k);if(e)e.value=d[k]!=null?(type==="num"?plain(d[k]):d[k]):""});
+  if(visKind==="bien"){updTypoSub(d.typoSub||"");(d.pieces||[]).forEach(addRoom);if(!(d.pieces||[]).length)ROOM_DEF.forEach(p=>addRoom({piece:p}))}
+  if(visKind==="avancement"){(d.lots||[]).forEach(addLot);updAv()}
+  visPhotos=[...(d.photos||[])];renderVisThumbs();visRefs=[...(d.refs||[])];renderRefs();const rp=$("#vRefPick");if(rp)rp.innerHTML="";
+  $("#visTitle").textContent=v?(v.ref?v.ref+" · ":"")+KINDS[visKind].label+(v.dossier?" · dossier "+v.dossier:""):KINDS[visKind].nouv;
+  $("#visDone").checked=d.status==="terminee";$("#visDel").hidden=!v||!isOwner();$("#visTemoin").hidden=!v||visKind==="avancement";$("#visNote").textContent="";
   $("#visShare").hidden=!canSharePdf();updSigHint();
   $("#visDlg").showModal();$("#visDlg").scrollTop=0;
   if(!v&&!d.gps)visGpsMe(true);
 }
 function readVisite(){
-  const o={};VIS_FIELDS.forEach(([k,l,type])=>{if(type==="chips")o[k]=getChips(k);else if(type==="multi")o[k]=getChips(k,true);else{const e=$("#v_"+k);if(!e)return;const val=e.value.trim();o[k]=type==="num"?(val===""?null:numIn(val)):val}});
+  const o={kind:visKind};fieldsOf().forEach(([k,l,type])=>{if(type==="chips")o[k]=getChips(k);else if(type==="multi")o[k]=getChips(k,true);else{const e=$("#v_"+k);if(!e)return;const val=e.value.trim();o[k]=type==="num"?(val===""?null:numIn(val)):val}});
   o.gps=$("#v_gps").value.trim();const g=coordsFrom(o.gps);if(g)o.gps=gpsStr(g);
-  o.pieces=readRooms();o.refs=[...visRefs];o.photos=[...visPhotos];o.status=$("#visDone").checked?"terminee":"brouillon";return o}
+  if(visKind==="bien")o.pieces=readRooms();if(visKind==="avancement")o.lots=readLots();o.refs=[...visRefs];o.photos=[...visPhotos];o.status=$("#visDone").checked?"terminee":"brouillon";return o}
 $("#visSave").onclick=async()=>{const o=readVisite(),base=visEditing,b=$("#visSave");
   if(o.gps&&!coordsFrom(o.gps)){$("#visNote").textContent="Coordonnées illisibles : écris « latitude, longitude »."; return}
   const id=base?.id||("v"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));
@@ -1148,7 +1221,9 @@ $("#visDel").onclick=async()=>{if(!visEditing||!isOwner())return;
   if(!visDelArmed){visDelArmed=true;$("#visDel").classList.add("arm");$("#visDel").textContent="Confirmer la suppression";return}
   try{const b=fdb.batch();b.delete(visCol().doc(visEditing.id));(visEditing.photos||[]).forEach(p=>{b.delete(phCol().doc(p.id));if(p.t&&p.t!==p.id)b.delete(phCol().doc(p.t))});await commitSoft(b.commit());$("#visDlg").close();toast("Fiche supprimée")}
   catch(e){$("#visNote").textContent=errMsg(e)}};
-$("#visAdd").onclick=()=>openVisite(null);
+function chooseKind(preset){$("#kindDlg").showModal();$("#kindDlg").dataset.preset=JSON.stringify(preset||{})}
+$$("#kindDlg .kindopt").forEach(b=>b.onclick=()=>{let p={};try{p=JSON.parse($("#kindDlg").dataset.preset||"{}")}catch(e){}$("#kindDlg").close();openVisite(null,{...p,kind:b.dataset.kind});if(p.gps)autoPlace()});
+$("#visAdd").onclick=()=>chooseKind();
 
 /* ---------- remplissage automatique : position, ville, quartier ---------- */
 async function visGpsMe(silent){const b=$("#vGpsMe");if(!b)return;b.disabled=true;b.textContent="Recherche…";
@@ -1165,7 +1240,7 @@ $("#visBody").addEventListener("change",e=>{if(e.target.id==="v_gps")autoPlace()
 /* ---------- éléments de référence (témoins) ---------- */
 const TYPO_TO_TYPE={"Maison":["Maison","Villa"],"Appartement":["Appartement"],"Villa":["Villa","Maison"],"Local commercial":["Local commercial"],"Usine":["Usine","Entrepôt / dépôt"]};
 function refOrigin(c){const s=(c.source+" "+c.nature+" "+c.contactName).toLowerCase();return /agence|agenz|mubawab|avito|sax|immo/.test(s)?"Ag. immob":"Particulier"}
-function renderRefs(){const T=$("#vRefTbl");T.innerHTML="";const g=coordsFrom($("#v_gps")?.value||"");
+function renderRefs(){const T=$("#vRefTbl");if(!T)return;T.innerHTML="";const g=coordsFrom($("#v_gps")?.value||"");
   $("#vRefInfo").textContent=visRefs.length?visRefs.length+" témoin"+(visRefs.length>1?"s":""):"Aucun pour l’instant";
   if(!visRefs.length)return;
   T.append(h("thead",null,h("tr",null,...["Réf.","Typologie","Prix","Tél","Adresse","Origine",""].map(l=>h("th",{"data-k":""},l)))));
@@ -1179,7 +1254,7 @@ function renderRefs(){const T=$("#vRefTbl");T.innerHTML="";const g=coordsFrom($(
   T.append(tb)}
 function proposeRefs(){const P=$("#vRefPick");P.innerHTML="";const g=coordsFrom($("#v_gps").value);
   if(!g){P.append(h("p",{class:"note",text:"Ajoute d’abord les coordonnées (bouton « Ma position »)."}));return}
-  const types=TYPO_TO_TYPE[getChips("typo")]||null;
+  const types=visKind==="terrain"?["Terrain"]:visKind==="avancement"?null:(TYPO_TO_TYPE[getChips("typo")]||null);
   let n=nearest(g,1500).filter(x=>!visRefs.includes(x.c.id));if(types)n=n.filter(x=>types.includes(x.c.type));n=n.slice(0,12);
   if(!n.length){P.append(h("p",{class:"note",text:"Aucun témoin"+(types?" de ce type":"")+" à moins de 1,5 km."}));return}
   P.append(h("p",{class:"note",text:"Témoins à moins de 1,5 km"+(types?" ("+types.join(", ")+")":"")+". Touche pour ajouter."}));
@@ -1206,31 +1281,21 @@ async function visAddPhotos(e){const files=[...e.target.files];e.target.value=""
 $("#vPhotoIn").onchange=visAddPhotos;$("#vCamIn").onchange=visAddPhotos;
 
 /* ---------- impression / PDF, texte, témoin ---------- */
-function visText(v){const L=[];L.push("FICHE DE VISITE "+(v.ref||"")+(v.dossier?" – Dossier "+v.dossier:""));
+function visText(v){const L=[],k=kindOf(v);L.push(KINDS[k].label.toUpperCase()+(v.dossier?" – Dossier "+v.dossier:""));
   L.push("Date : "+(v.date?new Date(v.date).toLocaleDateString("fr-FR"):"")+" · Visiteur : "+(v.visiteur||""));
-  VIS_SECTIONS.forEach(s=>{const parts=s.f.map(([k,l])=>{const x=v[k];if(x==null||x===""||(Array.isArray(x)&&!x.length))return null;if(k==="dossier"||k==="date"||k==="visiteur")return null;return l+" : "+(Array.isArray(x)?x.join(", "):typeof x==="number"?plain(x):x)}).filter(Boolean);
+  secsOf(k).forEach(s=>{const parts=s.f.map(([k,l])=>{const x=v[k];if(x==null||x===""||(Array.isArray(x)&&!x.length))return null;if(k==="dossier"||k==="date"||k==="visiteur")return null;return l+" : "+(Array.isArray(x)?x.join(", "):typeof x==="number"?plain(x):x)}).filter(Boolean);
     if(s.rooms&&(v.pieces||[]).length)parts.unshift(...v.pieces.map(p=>[p.piece,[p.sol,p.murs,p.plafond,p.menuiserie].filter(Boolean).join(" / ")].filter(Boolean).join(" : ")));
+    if(s.lots&&(v.lots||[]).length){const r=avCalc(v.lots);v.lots.forEach((lt,i)=>parts.push(lt.lot+" : "+(r.lots[i].av!=null?Math.round(r.lots[i].av)+" %":"—")+" ("+lt.sous.filter(x=>x.n).map(x=>x.n+" "+(x.av!=null?x.av+" %":"—")).join(", ")+")"));if(r.global!=null)parts.push("Avancement global : "+Math.round(r.global)+" %")}
     if(s.refs&&(v.refs||[]).length)parts.push("Références : "+v.refs.map(id=>{const c=items.find(x=>x.id===id);return c?(c.ref||"")+" "+(c.type||"")+" "+fmt(c.price)+priceSuf(c.tx):""}).filter(Boolean).join(" ; "));
     if(parts.length){L.push("");L.push(s.t.toUpperCase());parts.forEach(p=>L.push("- "+p))}});
   return L.join("\n")}
-function printVisite(v){const A=$("#printArea");A.innerHTML="";
-  const cell=(l,x)=>h("div",{class:"pc"},h("span",{class:"pl",text:l}),h("span",{class:"pv",text:x==null||x===""?"":Array.isArray(x)?x.join(", "):typeof x==="number"?plain(x):String(x)}));
-  A.append(h("div",{class:"ph"},h("div",null,h("div",{class:"pbrand",text:"Valtera"}),h("h1",{text:"Fiche de visite"})),h("div",{class:"pref"},h("b",{class:"num",text:v.ref||""}),h("div",{text:v.dossier?"Dossier "+v.dossier:""}))));
-  VIS_SECTIONS.forEach(s=>{const sec=h("section",{class:"ps"},h("h2",{text:s.t}));const g=h("div",{class:"pg"});
-    s.f.forEach(([k,l,type])=>{if(k==="typoSub"&&!v.typoSub)return;g.append(cell(l,k==="date"&&v.date?new Date(v.date).toLocaleDateString("fr-FR"):v[k]))});sec.append(g);
-    if(s.rooms){const t=h("table",{class:"pt"},h("tr",null,...["Pièce","Revêtement sol","Murs","Plafond","Menuiserie int."].map(x=>h("th",{text:x}))));(v.pieces||[]).forEach(p=>t.append(h("tr",null,...["piece","sol","murs","plafond","menuiserie"].map(k=>h("td",{text:p[k]||""})))));sec.insertBefore(t,g)}
-    if(s.refs){const t=h("table",{class:"pt"},h("tr",null,...["Réf.","Typologie","Prix","Tél","Adresse","Origine"].map(x=>h("th",{text:x}))));
-      (v.refs||[]).forEach(id=>{const c=items.find(x=>x.id===id);if(c)t.append(h("tr",null,h("td",{text:c.ref||""}),h("td",{text:c.type||""}),h("td",{text:fmt(c.price)+priceSuf(c.tx)}),h("td",{text:c.contactTel||""}),h("td",{text:[c.address,c.district,c.city].filter(Boolean).join(", ")}),h("td",{text:refOrigin(c)})))});sec.append(h("h3",{text:"Éléments de référence"}),t)}
-    A.append(sec)});
-  A.append(h("div",{class:"psign"},h("div",null,"Signature visiteur : ",h("b",{text:v.visiteur||""})),h("div",{class:"meta",text:"Édité le "+new Date().toLocaleDateString("fr-FR")+" avec Valtera"})));
-  document.body.classList.add("printing");setTimeout(()=>{window.print();setTimeout(()=>document.body.classList.remove("printing"),400)},60)}
 function canSharePdf(){try{return !!navigator.canShare&&navigator.canShare({files:[new File([""],"a.pdf",{type:"application/pdf"})]})}catch(e){return false}}
 const visCur=()=>({createdBy:ME.uid,...(visEditing||{}),...readVisite()});
 $("#visPdf").onclick=e=>downloadVisitePdf(visCur(),e.currentTarget);
 $("#visShare").onclick=e=>downloadVisitePdf(visCur(),e.currentTarget);
 $("#visCopy").onclick=e=>copyText(visText({...(visEditing||{}),...readVisite()}),e.target);
 $("#visTemoin").onclick=()=>{const v={...(visEditing||{}),...readVisite()};$("#visDlg").close();openForm();
-  const map={"Maison":"Maison","Appartement":"Appartement","Villa":"Villa","Local commercial":"Local commercial","Usine":"Usine"};const t=map[v.typo]||"Autre";
+  const map={"Maison":"Maison","Appartement":"Appartement","Villa":"Villa","Local commercial":"Local commercial","Usine":"Usine"};const t=kindOf(v)==="terrain"?"Terrain":(map[v.typo]||"Autre");
   ensureOpt($("#f_type"),t);$("#f_type").value=t;$("#f_type").dispatchEvent(new Event("change"));
   const set=(id,x)=>{const e=$("#"+id);if(e&&x!=null&&x!==""){e.value=x;e.dispatchEvent(new Event("input"))}};
   set("f_sMain",v.sConst!=null?plain(v.sConst):"");set("f_sLand",v.sTerrain!=null?plain(v.sTerrain):"");set("f_price",v.valeur!=null?plain(v.valeur):"");
@@ -1346,26 +1411,48 @@ function loadScript(src){return new Promise((res,rej)=>{const s=document.createE
 function ensurePdf(){if(window.jspdf?.jsPDF?.API?.autoTable)return Promise.resolve();
   return pdfLibs||(pdfLibs=loadScript("vendor/jspdf/jspdf.umd.min.js").then(()=>loadScript("vendor/jspdf/jspdf.plugin.autotable.min.js")).catch(e=>{pdfLibs=null;throw e}))}
 const pt=v=>String(v??"").replace(/²/g,"2").replace(/[’‘]/g,"'").replace(/[“”«»]/g,'"').replace(/ | /g," ");
-async function visitePdf(v){
+async function pdfKit(){
   await ensurePdf();const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"a4"});
   const M=10,W=210-2*M,teal=[13,92,99],line=[150,160,165];
-  const X=(cond)=>cond?"X":"";const val=x=>x==null||x===""?"":typeof x==="number"?pt(plain(x)):pt(x);
+  const K={doc,M,W,teal,y:M};
+  K.X=cond=>cond?"X":"";K.val=x=>x==null||x===""?"":typeof x==="number"?pt(plain(x)):pt(Array.isArray(x)?x.join(", "):x);
   const base={theme:"grid",margin:{left:M,right:M},tableWidth:W,styles:{font:"helvetica",fontSize:8,cellPadding:1,lineColor:line,lineWidth:.2,textColor:[20,30,35],valign:"middle",overflow:"linebreak"},
     headStyles:{fillColor:[234,241,241],textColor:[20,30,35],fontStyle:"bold",halign:"center"},bodyStyles:{minCellHeight:4.6}};
-  let y=M;
-  const title=t=>{y+=3.4;doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(20,30,35);doc.text(t,M,y);y+=1.2};
+  K.title=t=>{if(K.y>287-14){doc.addPage();K.y=M}K.y+=3.4;doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(20,30,35);doc.text(pt(t),M,K.y);K.y+=1.2};
   const check=d=>{if(d.section!=="body"||!d.cell.raw||!d.cell.raw._check)return;const cx=d.cell.x+d.cell.width/2,cy=d.cell.y+d.cell.height/2,s=Math.min(1.25,d.cell.height/5.2);
     doc.setDrawColor(...teal);doc.setLineWidth(.55);doc.setLineCap("round");doc.setLineJoin("round");doc.lines([[1.25*s,1.35*s],[2.35*s,-2.9*s]],cx-1.75*s,cy+.05*s,[1,1],"S",false);doc.setLineWidth(.2)};
-  const tbl=o=>{const own=o.didDrawCell;doc.autoTable({...base,startY:y,...o,styles:{...base.styles,...(o.styles||{})},didDrawCell:d=>{check(d);if(own)own(d)}});y=doc.lastAutoTable.finalY};
-  const c=(t,o)=>({content:pt(t),...(o||{})}),b=t=>c(t,{styles:{fontStyle:"bold"}}),xc=t=>t==="X"?{content:"",_check:true}:c(t,{styles:{halign:"center",fontStyle:"bold",textColor:teal}});
-  // en-tête
-  doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(20,30,35);doc.text("Fiche De Visite :",105,y+6,{align:"center"});
-  y+=10;
-  const dateFr=v.date?new Date(v.date+"T12:00:00").toLocaleDateString("fr-FR"):"";
+  K.tbl=o=>{const own=o.didDrawCell;doc.autoTable({...base,startY:K.y,...o,styles:{...base.styles,...(o.styles||{})},didDrawCell:d=>{check(d);if(own)own(d)}});K.y=doc.lastAutoTable.finalY};
+  K.c=(t,o)=>({content:pt(t),...(o||{})});K.b=t=>K.c(t,{styles:{fontStyle:"bold"}});
+  K.xc=t=>t==="X"?{content:"",_check:true}:K.c(t,{styles:{halign:"center",fontStyle:"bold",textColor:teal}});
+  K.hc=t=>K.c(t,{styles:{halign:"center"}});
+  K.head=t=>{doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(20,30,35);doc.text(pt(t),105,K.y+6,{align:"center"});K.y+=10};
+  K.dateFr=v=>v.date?new Date(v.date+"T12:00:00").toLocaleDateString("fr-FR"):"";
+  K.valeur=v=>{K.y+=2.5;K.tbl({body:[[K.c("Valeur du bien estimée :",{styles:{fontStyle:"bold",fillColor:[234,241,241]}}),K.c(v.valeur!=null&&v.valeur!==""?pt(fmt(v.valeur))+" DH":"",{styles:{fontStyle:"bold",fontSize:10}})]],columnStyles:{0:{cellWidth:60}}})};
+  K.checks=(labels,on,o)=>K.tbl({head:[labels.map(l=>K.c(l))],body:[labels.map(l=>K.xc(K.X(on.includes(l))))],...(o||{})});
+  K.equip=v=>{const {c,xc,X,tbl}=K;const eq=["eqCommercial","eqLoisirs","eqScolaire","eqSante","eqSportif"];
+    tbl({styles:{fontSize:7.8,cellPadding:1},head:[[...["Commercial","Loisirs","Scolaire","Santé","Sportif"].map(t=>c(t,{colSpan:3})),c("Religieux",{colSpan:2}),c("Bus",{colSpan:2})]],
+      body:[[...eq.flatMap(()=>["B","M","F"]),"SUF","INS","O","N"].map(t=>c(t,{styles:{halign:"center"}})),
+        [...eq.flatMap(k=>["B","M","F"].map(o=>X(v[k]===o))),X(v.eqReligieux==="Suffisant"),X(v.eqReligieux==="Insuffisant"),X(v.eqBus==="Oui"),X(v.eqBus==="Non")].map(xc)]})};
+  K.sign=async v=>{const sig=await getSignature(v.createdBy||ME.uid);if(K.y>287-31){doc.addPage();K.y=M}
+    K.y+=2.5;K.tbl({head:[[K.c("Remarques :",{styles:{halign:"left"}}),K.c("Signature visiteur :",{styles:{halign:"left"}})]],body:[[K.c(K.val(v.remarques)),K.c(sig?"":pt(v.visiteur||""),{styles:{minCellHeight:22,valign:"bottom",fontSize:7.5,textColor:[90,100,105]}})]],
+      columnStyles:{1:{cellWidth:62}},bodyStyles:{minCellHeight:22,valign:"top"},
+      didDrawCell:d=>{if(d.section==="body"&&d.column.index===1&&sig){try{const p=doc.getImageProperties(sig),r=Math.min((d.cell.width-6)/p.width,(d.cell.height-9)/p.height),w=p.width*r,hh=p.height*r;
+        doc.addImage(sig,"PNG",d.cell.x+(d.cell.width-w)/2,d.cell.y+2,w,hh);doc.setFontSize(7.5);doc.setTextColor(90,100,105);doc.text(pt(v.visiteur||""),d.cell.x+d.cell.width/2,d.cell.y+d.cell.height-2,{align:"center"})}catch(e){}}}})};
+  K.head4=(v,third)=>{const {b,c,val,tbl}=K;tbl({body:[
+    [b("Numéro du dossier"),c(val(v.dossier)),b("Ville :"),c(val(v.ville)),b("Rue :"),c(val(v.rue))],
+    [b("Visiteur"),c(val(v.visiteur)),b("Quartier :"),c(val(v.quartier)),b("N° :"),c(val(v.num))],
+    [b("Date de la visite"),c(K.dateFr(v)),b(third[0]),c(val(third[1])),b("Code postal :"),c(val(v.codePostal))],
+    [b("Contact"),c([v.contact,v.contactTel].filter(Boolean).join(" – ")),b("Municipalité/Commune :"),c(val(v.commune)),b("Coordonnées :"),c(val(v.gps))]],
+    columnStyles:{0:{cellWidth:28},1:{cellWidth:30},2:{cellWidth:34},3:{cellWidth:38},4:{cellWidth:24}}})};
+  return K}
+async function visitePdf(v){const k=kindOf(v);return k==="terrain"?terrainPdf(v):k==="avancement"?avancPdf(v):bienPdf(v)}
+async function bienPdf(v){
+  const K=await pdfKit(),{doc,M,teal}=K,X=K.X,val=K.val,c=K.c,b=K.b,xc=K.xc,title=K.title,tbl=K.tbl;
+  K.head("Fiche De Visite :");
   tbl({body:[
     [b("Numéro du dossier"),c(val(v.dossier)),b("Ville :"),c(val(v.ville)),b("Rue :"),c(val(v.rue))],
     [b("Visiteur"),c(val(v.visiteur)),b("Quartier :"),c(val(v.quartier)),b("Code Postal :"),c(val(v.codePostal))],
-    [b("Date de la visite"),c(dateFr),b("Résidence :"),c(val(v.residence)),b("Ilot :"),c(val(v.ilot))],
+    [b("Date de la visite"),c(K.dateFr(v)),b("Résidence :"),c(val(v.residence)),b("Ilot :"),c(val(v.ilot))],
     [b("Contact"),c([v.contact,v.contactTel].filter(Boolean).join(" – ")),b("N° :"),c(val(v.num)),b("Porte :"),c(val(v.porte))],
     ["","",b("Etage :"),c(val(v.etage)),b("Municipalité/Commune :"),c(val(v.commune))],
     ["","",b("Orientation :"),c(val(v.orientation)),"",""],
@@ -1378,7 +1465,7 @@ async function visitePdf(v){
     body:[[c("Unifamiliale"),c("Multifamiliale"),"",c("Isolée"),c("En bande"),c("Jumelée"),c("Avec accès rue"),c("Sans accès rue"),""].map(x=>typeof x==="string"?x:{...x,styles:{halign:"center"}}),
       [...grp("Maison",TYPO_SUB.Maison),X(ty==="Appartement"),...grp("Villa",TYPO_SUB.Villa),...grp("Local commercial",TYPO_SUB["Local commercial"]),X(ty==="Usine")].map(xc)]});
   if(ty==="Autre")tbl({body:[[b("Autre typologie"),c(val(v.typoSub)||"Autre")]]});
-  y+=1.5;tbl({tableWidth:110,body:[[b("Rés. principale"),xc(X(v.resType==="Principale")),b("Rés. secondaire"),xc(X(v.resType==="Secondaire"))]],columnStyles:{1:{cellWidth:18},3:{cellWidth:18}}});
+  K.y+=1.5;tbl({tableWidth:110,body:[[b("Rés. principale"),xc(X(v.resType==="Principale")),b("Rés. secondaire"),xc(X(v.resType==="Secondaire"))]],columnStyles:{1:{cellWidth:18},3:{cellWidth:18}}});
   // construction
   title("Construction :");
   tbl({head:[[c("N. Log"),c("N. Lc"),c("N. bureaux"),c("N. Asc"),c("N. Etages"),c("Garage"),c("S.sol"),c("HSP (LC et U)",{colSpan:2}),c("Terrasse",{colSpan:2})]],
@@ -1390,10 +1477,7 @@ async function visitePdf(v){
     body:[["","","","",...["Oui","Non","Gaz","Élect","Non","Préin","Oui","Non"].map(t=>c(t,{styles:{halign:"center"}}))],
       [val(v.jardin),val(v.piscine),val(v.tsport),val(v.cloturee),X(v.clim==="Oui"),X(v.clim==="Non"),X(v.chauffeEau==="Gaz"),X(v.chauffeEau==="Électrique"),X(v.chauffeEau==="Non"),X(v.incendie==="Pré-installation"),X(v.incendie==="Oui"),X(v.incendie==="Non")].map(xc)]});
   // équipement quartier
-  title("Équipement quartier :");const eq=["eqCommercial","eqLoisirs","eqScolaire","eqSante","eqSportif"];
-  tbl({styles:{fontSize:7.8,cellPadding:1},head:[[...["Commercial","Loisirs","Scolaire","Santé","Sportif"].map(t=>c(t,{colSpan:3})),c("Religieux",{colSpan:2}),c("Bus",{colSpan:2})]],
-    body:[[...eq.flatMap(()=>["B","M","F"]),"SUF","INS","O","N"].map(t=>c(t,{styles:{halign:"center"}})),
-      [...eq.flatMap(k=>["B","M","F"].map(o=>X(v[k]===o))),X(v.eqReligieux==="Suffisant"),X(v.eqReligieux==="Insuffisant"),X(v.eqBus==="Oui"),X(v.eqBus==="Non")].map(xc)]});
+  title("Équipement quartier :");K.equip(v);
   // description
   title("Description :");
   tbl({body:[
@@ -1409,22 +1493,62 @@ async function visitePdf(v){
   for(let i=0;i<n;i++){const r=rooms[i]||{},d=docRows[i];qb.push([c(val(r.piece)),c(val(r.sol)),c(val(r.murs)),c(val(r.plafond)),c(val(r.menuiserie)),d?c(d[1]):"",d?xc(X(docs.includes(d[0]))):""])}
   tbl({head:[[c("Pièces"),c("Revêtements"),c("Murs"),c("Plafond"),c("Menuiserie intérieure"),c("Doc en possession lors de la visite",{colSpan:2})]],body:qb,columnStyles:{6:{cellWidth:10}}});
   // valeur
-  y+=2.5;tbl({body:[[c("Valeur du bien estimée :",{styles:{fontStyle:"bold",fillColor:[234,241,241]}}),c(v.valeur!=null&&v.valeur!==""?pt(fmt(v.valeur))+" DH":"",{styles:{fontStyle:"bold",fontSize:10}})]],columnStyles:{0:{cellWidth:60}}});
+  K.y+=2.5;tbl({body:[[c("Valeur du bien estimée :",{styles:{fontStyle:"bold",fillColor:[234,241,241]}}),c(v.valeur!=null&&v.valeur!==""?pt(fmt(v.valeur))+" DH":"",{styles:{fontStyle:"bold",fontSize:10}})]],columnStyles:{0:{cellWidth:60}}});
   // références
   title("Éléments de références :");const refs=(v.refs||[]).map(id=>items.find(x=>x.id===id)).filter(Boolean);
   const rb=refs.map(r=>{const ag=refOrigin(r)==="Ag. immob";return [c([r.type,r.tx!=="Vente"?r.tx:"",r.surface?plain(r.surface)+" m²":"",r.price?fmt(r.price)+priceSuf(r.tx):"",r.ref?"("+r.ref+")":""].filter(Boolean).join(" · ")),c(val(r.contactTel)),c([r.address,r.district,r.city].filter(Boolean).join(", ")),xc(X(!ag)),xc(X(ag))]});
   while(rb.length<3)rb.push(["","","","",""]);
   tbl({head:[[c("Typologie"),c("Tél"),c("Adresse"),c("Particulier"),c("Ag. immob")]],body:rb,columnStyles:{0:{cellWidth:58},1:{cellWidth:27},3:{cellWidth:19},4:{cellWidth:19}}});
-  // remarques + signature
-  const sig=await getSignature(v.createdBy||ME.uid);
-  if(y>287-31){doc.addPage();y=M}
-  y+=2.5;const sigCellW=62;
-  tbl({head:[[c("Remarques :",{styles:{halign:"left"}}),c("Signature visiteur :",{styles:{halign:"left"}})]],body:[[c(val(v.remarques)),c(sig?"":pt(v.visiteur||""),{styles:{minCellHeight:22,valign:"bottom",fontSize:7.5,textColor:[90,100,105]}})]],
-    columnStyles:{1:{cellWidth:sigCellW}},bodyStyles:{minCellHeight:22,valign:"top"},
-    didDrawCell:d=>{if(d.section==="body"&&d.column.index===1&&sig){try{const p=doc.getImageProperties(sig),r=Math.min((d.cell.width-6)/p.width,(d.cell.height-9)/p.height),w=p.width*r,hh=p.height*r;
-      doc.addImage(sig,"PNG",d.cell.x+(d.cell.width-w)/2,d.cell.y+2,w,hh);doc.setFontSize(7.5);doc.setTextColor(90,100,105);doc.text(pt(v.visiteur||""),d.cell.x+d.cell.width/2,d.cell.y+d.cell.height-2,{align:"center"})}catch(e){}}}});
-  return doc}
-function visPdfName(v){return ("Fiche_de_visite_"+(v.dossier||v.date||new Date().toISOString().slice(0,10))).replace(/[^\w\-]+/g,"_")+".pdf"}
+  await K.sign(v);return doc}
+async function terrainPdf(v){
+  const K=await pdfKit(),{doc}=K,X=K.X,val=K.val,c=K.c,b=K.b,xc=K.xc,hc=K.hc,title=K.title,tbl=K.tbl,on=k=>Array.isArray(v[k])?v[k]:(v[k]?[v[k]]:[]);
+  K.head("Fiche de visite : Terrain");
+  K.head4(v,["Orientation :",v.orientation]);
+  title("Destination :");K.checks(["Terrain agricole","Terrain constructible","Maison","Villa","Usine","Immeuble","TR agricole","Autre"],on("destination"));
+  K.y+=1.5;K.checks(["Isolé","En bande","Jumelée","Zone urbaine","Zone rurale"],[v.implantation,v.zone].filter(Boolean));
+  const prec=[v.sTerrain!=null&&v.sTerrain!==""?"Superficie : "+plain(v.sTerrain)+" m²":"",v.precision?"Précision : "+v.precision:""].filter(Boolean).join("   ·   ");
+  if(prec){K.y+=1.5;tbl({theme:"plain",body:[[c(prec,{styles:{cellPadding:{top:1,bottom:1,left:0,right:0}}})]]})}
+  title("Équipement quartier :");K.equip(v);
+  title("Viabilité :");
+  tbl({head:[[c("Eau",{colSpan:2}),c("Électricité",{colSpan:2}),c("Assainissement",{colSpan:2}),c("Voirie",{colSpan:2})]],
+    body:[["Réseau général","Puits","Public","Privé","Réseau général","FS","Goudronnée","Piste"].map(hc),
+      [X(on("eau").includes("Réseau général")),X(on("eau").includes("Puits")),X(on("elec").includes("Public")),X(on("elec").includes("Privé")),X(on("assain").includes("Réseau général")),X(on("assain").includes("FS")),X(on("voirie").includes("Goudronnée")),X(on("voirie").includes("Piste"))].map(xc)]});
+  title("Topographie du terrain :");K.checks(["Terrain plat","Terrain en pente","Terrain en relief","Dénivelé important"],on("topo"));
+  title("Voie d'accès :");
+  tbl({head:[["Goudronnée","Non goudronnée","Publique","Privée","Distance"].map(t=>c(t))],body:[[...["Goudronnée","Non goudronnée","Publique","Privée"].map(l=>xc(X(on("acces").includes(l)))),c(val(v.distance),{styles:{halign:"center"}})]],columnStyles:{4:{cellWidth:62}}});
+  title("Servitudes / Charges urbanistiques grevant le terrain :");
+  const sv=["Ligne haute tension / Ligne électrique","Servitude de passage","Oued / Khatara","Voie d'aménagement","Voie ferrée","Autre"];
+  tbl({head:[sv.map(t=>c(t))],body:[sv.map(l=>xc(X(on("servitudes").includes(l)))),...(v.servAutre?[[c("Autre : "+v.servAutre,{colSpan:6})]]:[])]});
+  title("Nuisances :");const nu=["Nuisances sonores","Nuisance olfactive (décharge…)","Autre"];
+  tbl({head:[nu.map(t=>c(t))],body:[nu.map(l=>xc(X(on("nuisances").includes(l)))),...(v.nuisAutre?[[c("Autre : "+v.nuisAutre,{colSpan:3})]]:[])]});
+  K.valeur(v);
+  title("Étude de marché & transactions :");const et=["Étude de marché complète","Étude de marché incomplète","Témoins introduits dans la carte","Étude des transactions effectuée"];
+  const byType={};(v.refs||[]).map(id=>items.find(x=>x.id===id)).filter(Boolean).forEach(r=>{(byType[r.type||"Autre"]=byType[r.type||"Autre"]||[]).push(r.ref||r.code||"")});
+  const codeRows=Object.entries(byType).map(([t,cs])=>[c(t+" : "+cs.filter(Boolean).join(" + "),{colSpan:4})]);if(v.codesAutres)codeRows.push([c(v.codesAutres,{colSpan:4})]);
+  tbl({head:[et.map(t=>c(t))],body:[et.map(l=>xc(X(on("etude").includes(l)))),[c("Codes témoins",{colSpan:4,styles:{fontStyle:"bold",fillColor:[234,241,241]}})],...(codeRows.length?codeRows:[[c("",{colSpan:4})]])]});
+  title("Documents (✓ = disponible lors de la visite) :".replace("✓","coché"));const dc=["C.P","P.C","N.R","C. des charges","P. autorisé","Autre"];
+  tbl({head:[dc.map(t=>c(t))],body:[dc.map(l=>xc(X(on("docs").includes(l)))),...(v.docsAutre?[[c("Autre : "+v.docsAutre,{colSpan:6})]]:[])]});
+  title("Constructions sur le terrain :");tbl({body:[[c("Description (type – date de construction) : "+val(v.constructions))]]});
+  await K.sign(v);return doc}
+async function avancPdf(v){
+  const K=await pdfKit(),{doc}=K,val=K.val,c=K.c,b=K.b,title=K.title,tbl=K.tbl;
+  K.head("Fiche d'état d'avancement :");
+  K.head4(v,["Type de bien :",v.typeBien]);
+  title("Avancement des travaux :");
+  const lots=(v.lots||[]).filter(l=>l.lot||(l.sous||[]).length),r=avCalc(lots),pc=x=>x==null||x===""?"":plain(x)+" %",body=[];
+  lots.forEach((lt,i)=>{const ss=(lt.sous||[]).length?lt.sous:[{n:""}],n=ss.length,la=r.lots[i]?.av;
+    ss.forEach((s,j)=>{const row=[];
+      if(j===0)row.push(c(lt.lot+(la!=null?"\n("+Math.round(la)+" %)":""),{rowSpan:n,styles:{fontStyle:"bold",valign:"middle"}}));
+      row.push(c(s.n));if(j===0)row.push(c(pc(lt.pct),{rowSpan:n,styles:{halign:"center",valign:"middle"}}));
+      row.push(c(pc(s.pct),{styles:{halign:"center"}}));if(j===0)row.push(c(lt.budget!=null&&lt.budget!==""?pt(fmt(lt.budget))+" DH":"",{rowSpan:n,styles:{halign:"right",valign:"middle"}}));
+      row.push(c(s.av!=null?plain(s.av)+" %":"",{styles:{halign:"center",fontStyle:"bold",textColor:K.teal}}));body.push(row)})});
+  body.push([c("Avancement global",{colSpan:5,styles:{fontStyle:"bold",halign:"right",fillColor:[234,241,241]}}),c(r.global!=null?Math.round(r.global)+" %":"",{styles:{fontStyle:"bold",halign:"center",fontSize:10,fillColor:[234,241,241],textColor:K.teal}})]);
+  tbl({head:[["Avancement Lots","Sous-lot","% par lot","% par sous-lot","Budget par lot","% Avancement"].map(t=>c(t))],body,styles:{fontSize:7.8},
+    columnStyles:{0:{cellWidth:34},2:{cellWidth:17},3:{cellWidth:19},4:{cellWidth:28},5:{cellWidth:22}}});
+  if(r.global!=null&&r.basis){doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(90,100,105);
+    doc.text(pt(r.basis==="pct"?"Avancement global pondéré par les % des lots.":r.basis==="budget"?"Avancement global pondéré par les budgets des lots.":"Avancement global : lots comptés à égalité."),K.M,K.y+3.2);K.y+=3.5}
+  await K.sign(v);return doc}
+function visPdfName(v){const k=kindOf(v),p=k==="terrain"?"Fiche_de_visite_Terrain_":k==="avancement"?"Etat_d_avancement_":"Fiche_de_visite_";return (p+(v.dossier||v.date||new Date().toISOString().slice(0,10))).replace(/[^\w\-]+/g,"_")+".pdf"}
 async function downloadVisitePdf(v,btn){const lbl=btn?.textContent;if(btn){btn.disabled=true;btn.textContent="Préparation…"}
   try{const doc=await visitePdf(v);const blob=doc.output("blob"),name=visPdfName(v);
     const file=new File([blob],name,{type:"application/pdf"});

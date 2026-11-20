@@ -301,6 +301,31 @@ img{max-width:100%}
 .pickcross{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;pointer-events:none;z-index:500}
 .pickbar{flex-wrap:wrap}
 .pickbar input{flex:1 1 160px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;background:var(--surface);color:var(--ink)}
+.kinds{display:grid;gap:10px}
+.kindopt{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--surface);color:var(--ink);cursor:pointer;font:inherit}
+.kindopt b{font:600 16px var(--f-display)}
+.kindopt:hover,.kindopt:focus-visible{border-color:var(--brand)}
+.vsearch select{border:none;background:none;color:var(--ink);font:inherit;padding:8px 0;max-width:42%}
+.kchip{background:var(--surface-2);color:var(--muted)}
+.lots{display:flex;flex-direction:column;gap:10px}
+.lot{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface)}
+.lothead{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.lothead .lotname{flex:1 1 180px;min-width:0;font-weight:600}
+.lot input{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;background:var(--surface);color:var(--ink);min-width:0}
+.mini{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--muted);font-weight:500}
+.mini input{width:88px}
+.lotav{font-weight:600;color:var(--brand);min-width:46px;text-align:right;align-self:center}
+.sous{display:flex;flex-direction:column;gap:6px}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(150px,220px) auto;gap:8px;align-items:end}
+.srow .sname{width:100%}
+.avbox{display:flex;align-items:center;gap:6px}
+.avbox input[type=range]{flex:1;min-width:0;accent-color:var(--brand)}
+.avbox input[type=range].unset{opacity:.35}
+.avbox .avn{width:54px;text-align:right}
+.lotfoot{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:10px}
+.avglob{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.avglob b{font-size:20px;color:var(--brand)}
+@media (max-width:600px){.srow{grid-template-columns:minmax(0,1fr) auto;}.srow .avbox{grid-column:1/2}.srow>label.mini{grid-row:1;grid-column:2}}
 .sigpad{display:block;width:100%;height:200px;background:#fff;border:1.5px dashed var(--line);border-radius:10px;touch-action:none;cursor:crosshair}
 .sigcur{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .sigcur img{max-height:64px;max-width:220px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px}
