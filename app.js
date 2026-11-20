@@ -1465,6 +1465,11 @@ async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!naviga
   const city=v=>{if(v&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),v);$("#f_city").value=v;$("#f_city").dispatchEvent(new Event("change"));n++}};
   try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
   if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
+  /* OpenStreetMap n'a pas de quartier ici (zone en limite de commune, par exemple) : celui du témoin le plus proche, à moins de 600 m */
+  if(live()&&!$("#f_district").value.trim()){const cur=editing;let best=null;
+    items.forEach(c=>{if(!c.district||(cur&&c.id===cur.id))return;const p=gpsOf(c);if(!p)return;const d=distM(g,p);if(d<=600&&(!best||d<best[1]))best=[c,d]});
+    if(best){const e=$("#f_district");e.value=best[0].district;e.dispatchEvent(new Event("input"));
+      if(!$("#f_city").value.trim()&&best[0].city)city(best[0].city);toast("Quartier repris du témoin "+(best[0].ref||"voisin")+" (à "+Math.round(best[1])+" m)")}}
   try{const sl=streetLine(await nearStreets(g[0],g[1]));if(!live()||!sl?.rue)return;const a=$("#f_address");
     if(!a.value.trim()||(rue&&a.value===rue&&sl.angle)){a.value=sl.rue;a.dispatchEvent(new Event("input"));toast("Adresse : "+sl.rue)}}catch(e){}}
 /* ===================== signature du visiteur ===================== */
