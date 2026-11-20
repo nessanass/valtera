@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Valtera</title>
+<meta name="description" content="Valtera, plateforme d’expertise immobilière : témoins de marché, carte satellite, études de marché.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self'; img-src 'self' data: blob: https://server.arcgisonline.com https://tile.openstreetmap.org https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://apis.google.com https://nominatim.openstreetmap.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://valtera-1ad0f.firebaseapp.com; frame-src https://valtera-1ad0f.firebaseapp.com https://accounts.google.com https://apis.google.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#0b1e3b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Valtera">
+<script src="boot.js?v=20261120161902"></script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-180.png">
+<link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="style.css?v=20261120161902">
+</head>
+<body>
+<section class="gate gut" id="gate" hidden>
+  <div class="gate-card">
+    <div class="gate-logo"><svg width="56" height="56" viewBox="0 0 32 32" aria-hidden="true"><rect class="lg" width="32" height="32" rx="8" fill="#1d6fe0"/><path d="M8.2 8.6 16 22.4 22.2 11.4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24.2" cy="8.2" r="3" fill="#e9a948"/><path d="M6.5 26h19" stroke="#fff" stroke-opacity=".55" stroke-width="1.8" stroke-linecap="round"/></svg><div><h1>Valtera</h1><div class="tag">Expertise immobilière</div></div></div>
+    <p>Témoins de marché, visites et dossiers d’expertise, réunis dans un seul outil de terrain.</p>
+    <button class="btn pri big" id="loginBtn" type="button" hidden><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Se connecter avec Google</button>
+    <div class="gate-wait" id="gateWait" hidden><span class="spin" aria-hidden="true"></span></div>
+    <p class="gate-msg" id="gateMsg" role="status"></p>
+    <button class="btn" id="switchBtn" type="button" hidden>Changer de compte</button>
+    <ul>
+      <li>Accès sur invitation : chaque compte a un rôle (propriétaire, collaborateur, lecteur).</li>
+      <li>Les téléphones et contacts restent visibles uniquement par qui les a saisis et par le propriétaire.</li>
+      <li>Carte satellite, position GPS du téléphone, et consultation même sans réseau.</li>
+    </ul>
+    <a class="gate-apk" id="gateApk" href="download/valtera.apk">Télécharger l’application Android</a>
+  </div>
+</section>
+<header class="bar gut">
+  <div class="in">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect class="lg" width="32" height="32" rx="8" fill="#1d6fe0"/><path d="M8.2 8.6 16 22.4 22.2 11.4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24.2" cy="8.2" r="3" fill="#e9a948"/><path d="M6.5 26h19" stroke="#fff" stroke-opacity=".55" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <div><h1>Valtera</h1><small><span class="dot off" id="onlineDot"></span><span id="count">Chargement…</span></small></div>
+    </div>
+    <button class="ibtn lab" id="pasteBtn" type="button" aria-label="Coller une note"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9 4.5V3.4h6v1.1M8.6 10h6.8M8.6 13.4h6.8M8.6 16.8h4"/></svg></span><span class="lbl">Coller une note</span></button>
+    <button class="btn pri fab" id="addBtn" type="button"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span><span>Nouveau témoin</span></button>
+    <div class="menuwrap">
+      <button class="ubtn" id="menuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Compte et menu"><span class="av" id="uAv">·</span><span class="uname" id="uName">Mon compte</span><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 9.5 5 5 5-5"/></svg></span></button>
+      <div class="menu" id="menu" hidden>
+        <button type="button" id="mPaste">Coller une note</button>
+        <button type="button" id="mEtudes">Mes études de marché</button>
+        <hr>
+        <button type="button" id="importBtn">Importer My Maps (KML)</button>
+        <button type="button" id="csvBtn">Importer CSV (Google Maps)</button>
+        <button type="button" id="exportBtn">Exporter Excel (CSV)</button>
+        <button type="button" id="kmlExport">Exporter pour Google My Maps (KML)</button>
+        <hr>
+        <button type="button" id="mSettings">Réglages des calculs</button>
+        <button type="button" id="mSig">Ma signature</button>
+        <button type="button" id="mApk">Application Android (APK)</button>
+        <hr>
+        <button type="button" id="mBackup">Sauvegarde complète (JSON)</button>
+        <button type="button" id="mRestore">Importer une sauvegarde (JSON)</button>
+        <button type="button" id="mLogout" hidden>Se déconnecter <span class="meta" id="acctMail"></span></button>
+      </div>
+    </div>
+    <input type="file" id="kmlInput" accept=".kml,application/vnd.google-earth.kml+xml,text/xml" hidden>
+    <input type="file" id="csvInput" accept=".csv,text/csv" hidden>
+    <input type="file" id="jsonInput" accept=".json,application/json" hidden>
+  </div>
+</header>
+<nav class="mods gut" id="mods" aria-label="Modules"><div class="in">
+  <button type="button" data-m="temoins" class="on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="9" height="13.5" rx="1.6"/><path d="M12.5 11h6.4a1.6 1.6 0 0 1 1.6 1.6v7.9H3.5M7 10.5h2M7 14h2M7 17.5h2M15.5 14.5h2M15.5 17.5h2"/></svg></span><span class="t">Témoins</span><span class="nb" id="nbTem" hidden></span></button>
+  <button type="button" data-m="carte" id="modCarte"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2-6-2Z"/><path d="M9 4.5v13M15 6.5v13"/></svg></span><span class="t">Carte</span></button>
+  <button type="button" data-m="visites" id="modVisites"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9 4.5V3.4h6v1.1M9 12.6l2.1 2.1 4-4.2"/></svg></span><span class="t">Fiches de visite</span><span class="ts">Visites</span><span class="nb" id="nbVis" hidden></span></button>
+  <button type="button" data-m="admin" id="modAdmin" hidden><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2 5 6v5.3c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-2.8Z"/><path d="m9.2 12 2 2 3.8-3.9"/></svg></span><span class="t">Administration</span><span class="ts">Admin</span></button>
+  <button type="button" data-m="dossiers" class="soon"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.6A1.6 1.6 0 0 1 5.1 6h3.8l2 2.1h8a1.6 1.6 0 0 1 1.6 1.6v7.7a1.6 1.6 0 0 1-1.6 1.6H5.1a1.6 1.6 0 0 1-1.6-1.6Z"/></svg></span><span class="t">Dossiers</span><span class="tag">bientôt</span></button>
+  <button type="button" data-m="ia" class="soon"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.2 13.7 9l4.8 1.7-4.8 1.7L12 17.2l-1.7-4.8-4.8-1.7L10.3 9Z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z"/></svg></span><span class="t">Assistant IA</span><span class="tag">bientôt</span></button>
+</div></nav>
+<div class="authbar gut" id="authBar" hidden><div class="in"><span id="authTxt"></span></div></div>
+
+<main class="gut" id="temoinsView">
+  <div class="in">
+    <div class="tools hero">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l4 4" stroke="currentColor" stroke-width="1.6"/></svg>
+        <input id="q" type="search" placeholder="Rechercher : quartier, réf. T-0001, téléphone, code SAX…" aria-label="Rechercher">
+      </div>
+      <button class="btn" id="fBtn" type="button" aria-expanded="false"><span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5h9.5M17.5 7.5H20M4 16.5h3.5M11.5 16.5H20"/><circle cx="15.5" cy="7.5" r="2"/><circle cx="9.5" cy="16.5" r="2"/></svg></span>Filtres <span class="badge" id="fCount" hidden>0</span></button>
+      <div class="seg" id="views">
+        <button type="button" data-v="list">Cartes</button><button type="button" data-v="table">Tableau</button><button type="button" data-v="map">Carte</button>
+      </div>
+    </div>
+
+    <section class="filters" id="filters" hidden>
+      <label>Type de bien<select id="fType"><option value="">Tous</option></select></label>
+      <label>Opération<select id="fTx"><option value="">Toutes</option></select></label>
+      <label>Statut<select id="fStatus"><option value="">Tous</option><option value="__none">Non renseigné</option></select></label>
+      <label>Nature<select id="fNature"><option value="">Toutes</option></select></label>
+      <label>Ville<select id="fCity"><option value="">Toutes</option></select></label>
+      <label>Quartier<input id="fDistrict" list="districts" placeholder="ex. Maârif"></label>
+      <label>Prix (DH)<span class="range"><input id="fPmin" inputmode="numeric" placeholder="min"><input id="fPmax" inputmode="numeric" placeholder="max"></span></label>
+      <label>Surface (m²)<span class="range"><input id="fSmin" inputmode="numeric" placeholder="min"><input id="fSmax" inputmode="numeric" placeholder="max"></span></label>
+      <label>Prix au m² (DH)<span class="range"><input id="fUmin" inputmode="numeric" placeholder="min"><input id="fUmax" inputmode="numeric" placeholder="max"></span></label>
+      <label>Relevé depuis<input id="fSince" type="date"></label>
+      <label>Tri<select id="sort">
+        <option value="date-desc">Plus récents</option><option value="date-asc">Plus anciens</option>
+        <option value="ppm-asc">Prix/m² croissant</option><option value="ppm-desc">Prix/m² décroissant</option>
+        <option value="price-asc">Prix croissant</option><option value="price-desc">Prix décroissant</option>
+        <option value="surface-asc">Surface croissante</option><option value="surface-desc">Surface décroissante</option>
+      </select></label>
+      <div class="wide">
+        <label>Autour d’un point (coordonnées GPS)<input id="near" inputmode="decimal" placeholder="ex. 33.5685, -7.5848 (copiées depuis Google Maps)"></label>
+        <label style="flex:0 1 120px">Rayon<select id="radius"><option value="200">200 m</option><option value="300">300 m</option><option value="500" selected>500 m</option><option value="1000">1 km</option><option value="2000">2 km</option><option value="5000">5 km</option><option value="10000">10 km</option></select></label>
+        <button class="btn" id="nearMe" type="button" style="flex:0 0 auto">Ma position</button>
+        <label class="chk"><input type="checkbox" id="fPhotos"> Avec photos</label>
+        <label class="chk"><input type="checkbox" id="fRecent"> Masquer les anciens</label>
+        <button class="btn" id="fReset" type="button" style="flex:0 0 auto">Réinitialiser</button>
+      </div>
+    </section>
+
+    <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
+    <p class="info" id="info" hidden></p>
+
+    <section class="list" id="list"></section>
+    <div class="tblwrap" id="tblWrap" hidden><table class="t" id="tbl"></table></div>
+    <section id="mapWrap" hidden>
+      <div id="map" role="application" aria-label="Carte satellite des témoins"></div>
+      <div class="mlegend" id="mlegend"></div>
+    </section>
+    <div class="more"><button class="btn" id="moreBtn" type="button" hidden>Afficher plus</button></div>
+    <p class="note" id="status" style="margin-top:14px"></p>
+  </div>
+</main>
+<section class="gut adm" id="adminView" hidden>
+  <div class="in">
+    <div class="adm-head hero"><h2>Administration</h2><p class="meta">Qui entre dans Valtera, avec quel rôle et jusqu’à quand. Les règles sont appliquées par le serveur, pas seulement par l’écran.</p></div>
+    <div class="adm-grid">
+      <form class="panel" id="invForm" autocomplete="off" novalidate>
+        <h3>Inviter une personne</h3>
+        <label>Adresse Gmail<input id="i_email" type="email" placeholder="prenom.nom@gmail.com" required></label>
+        <label>Rôle<select id="i_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
+        <div class="chks"><label class="chk"><input type="checkbox" checked disabled> Module Témoins</label><label class="chk"><input type="checkbox" id="i_m_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="i_m_export"> Peut exporter (Excel, My Maps, sauvegarde)</label></div>
+        <label><span>Accès jusqu’au <span class="u">(facultatif)</span></span><input id="i_expires" type="date"></label>
+        <div><button class="btn pri" type="submit" id="invBtn">Inviter</button></div>
+        <p class="note" id="invNote" role="status"></p>
+      </form>
+      <div class="panel">
+        <h3>Ce que chaque rôle peut faire</h3>
+        <div class="tblwrap flat"><table class="t roles">
+          <thead><tr><th data-k=""></th><th data-k="">Propriétaire</th><th data-k="">Collaborateur</th><th data-k="">Lecteur</th></tr></thead>
+          <tbody>
+            <tr><td>Voir les témoins et la carte</td><td>Oui</td><td>Oui</td><td>Oui</td></tr>
+            <tr><td>Ajouter un témoin</td><td>Oui</td><td>Oui</td><td>Non</td></tr>
+            <tr><td>Modifier</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
+            <tr><td>Supprimer</td><td>Oui</td><td>Non</td><td>Non</td></tr>
+            <tr><td>Voir les téléphones et contacts</td><td>Tous</td><td>Les siens</td><td>Non</td></tr>
+            <tr><td>Fiches de visite (si le module est donné)</td><td>Toutes</td><td>Les siennes</td><td>Non</td></tr>
+            <tr><td>Administration</td><td>Oui</td><td>Non</td><td>Non</td></tr>
+          </tbody></table></div>
+        <p class="note">Dans les observations partagées, les numéros de téléphone et le nom du contact sont remplacés par « [tél. privé] » et « [contact privé] ».</p>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Comptes <span class="meta" id="admCount"></span></h3>
+      <div class="tblwrap flat"><table class="t" id="admTbl"></table></div>
+    </div>
+  </div>
+</section>
+
+<section class="gut vis" id="visitesView" hidden>
+  <div class="in">
+    <div class="hero vhero"><div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Fiche de visite, fiche terrain et état d’avancement : remplies sur place, téléchargées en PDF.</p></div><button class="btn pri fab" type="button" id="visAdd"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span><span>Nouvelle fiche</span></button></div>
+    <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Rechercher une fiche…" aria-label="Rechercher une fiche"><select id="visKindF" aria-label="Type de fiche"><option value="">Tous les types</option><option value="bien">Bâti</option><option value="terrain">Terrain</option><option value="avancement">État d’avancement</option></select><span class="meta" id="visCount"></span></div></div>
+    <div class="vlist" id="visList"></div>
+  </div>
+</section>
+
+
+<div class="tray gut" id="tray" hidden>
+  <div class="in">
+    <div class="txt" id="trayTxt"></div>
+    <button class="btn" id="traySel" type="button">Voir la sélection</button>
+    <button class="btn" id="trayClear" type="button">Vider</button>
+    <button class="btn pri" id="trayEtude" type="button">Étude de marché</button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<datalist id="cities"></datalist>
+<datalist id="districts"></datalist>
+
+<dialog id="dlg">
+  <div class="dh"><h2 id="dlgTitle">Nouveau témoin</h2><button class="btn" type="button" data-close>Fermer</button></div>
+  <form class="db" id="form" autocomplete="off">
+    <div class="quick">
+      <label class="note" for="qText" style="color:var(--ink);font-weight:500">Remplissage rapide : colle ta note, l’observation SAX ou le texte de l’annonce</label>
+      <textarea id="qText" placeholder="ex. Local à louer 40 m rdc Contact 0600 00 00 00 33.5685,-7.5848 prix 7500 dh par mois"></textarea>
+      <div class="shot" id="shotRow" hidden><img id="shotImg" alt=""><span>Capture jointe</span><button class="btn sm" type="button" id="shotDel">Retirer</button></div>
+      <div class="row">
+        <button class="btn pri sm" type="button" id="qFill">Remplir la fiche</button>
+        <button class="btn sm" type="button" id="qAI" hidden>Analyser avec Claude</button>
+        <button class="btn sm" type="button" id="qShot" hidden>Joindre une capture d’annonce</button>
+        <input type="file" id="shotInput" accept="image/*" hidden>
+      </div>
+      <div class="st" id="qStatus"></div>
+    </div>
+
+    <fieldset>
+      <legend>Opération et bien</legend>
+      <div class="seg" id="txSeg" style="align-self:flex-start"></div>
+      <div class="fgrid">
+        <label>Type de bien<select id="f_type"></select></label>
+        <label>Nature du témoin<select id="f_nature"></select></label>
+        <label>Statut<select id="f_status"></select></label>
+        <label>Date du relevé<input id="f_date" type="date"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Surfaces</legend>
+      <div class="fgrid">
+        <label>Principale <span class="u">(RDC / habitable, m²)</span><input id="f_sMain" inputmode="decimal"></label>
+        <label>Mezzanine / soupente <span class="u">(m²)</span><input id="f_sMezz" inputmode="decimal"></label>
+        <label>Cave / sous-sol <span class="u">(m²)</span><input id="f_sCave" inputmode="decimal"></label>
+        <label>Terrasse <span class="u">(m²)</span><input id="f_sTerr" inputmode="decimal"></label>
+        <label>Terrain <span class="u">(m²)</span><input id="f_sLand" inputmode="decimal"></label>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="note">Prix au m² calculé sur :</span><div class="seg" id="basisSeg"><button type="button" data-v="bati">Bâti pondéré</button><button type="button" data-v="terrain">Terrain</button></div></div>
+      <div class="calc" id="surfCalc">—</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Prix</legend>
+      <div class="fgrid">
+        <label><span><span id="priceLbl">Prix demandé</span> <span class="u">(DH)</span></span><input id="f_price" inputmode="decimal" placeholder="ex. 1 200 000"></label>
+        <label><span><span id="ppmLbl">Prix au m²</span> <span class="u">(DH)</span></span><input id="f_ppm" inputmode="decimal" placeholder="calculé"></label>
+        <label id="avanceL">Avance / caution <span class="u">(DH)</span><input id="f_avance" inputmode="decimal"></label>
+        <label id="loyerL"><span><span id="loyerLbl">Loyer mensuel</span> <span class="u">(DH)</span></span><input id="f_loyer" inputmode="decimal"></label>
+      </div>
+      <div class="calc" id="priceCalc">—</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Localisation</legend>
+      <div class="fgrid">
+        <label>Ville<input id="f_city" list="cities" placeholder="ex. Casablanca"></label>
+        <label>Quartier<input id="f_district" list="districts" placeholder="ex. Mers Sultan"></label>
+        <label class="s2">Adresse<input id="f_address" placeholder="Rue, n°, résidence…"></label>
+        <label class="s2">Position GPS<input id="f_gps" inputmode="decimal" placeholder="ex. 33.5731, -7.5898"></label>
+        <label>Étage<input id="f_floor" placeholder="ex. RDC, 3e étage"></label>
+        <div style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap"><button class="btn sm" type="button" id="gpsMe">Ma position</button><button class="btn sm" type="button" id="gpsPick">Sur la carte</button><a class="btn sm" id="gpsCheck" target="_blank" rel="noopener" href="#" hidden>Vérifier en satellite</a></div>
+      </div>
+      <span class="note">Sur le terrain, appuie sur « Ma position ». Sinon, sur la carte de Valtera ou sur Google Maps, appuie longuement sur l’endroit et copie les coordonnées.</span>
+    </fieldset>
+
+    <fieldset>
+      <legend>Description</legend>
+      <div class="fgrid">
+        <label>Pièces<input id="f_rooms" placeholder="ex. 3 ch + salon"></label>
+        <label>État<select id="f_state"></select></label>
+        <label>Standing<select id="f_standing"></select></label>
+        <label>Âge <span class="u">(ans)</span><input id="f_age" inputmode="numeric"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Source et contact</legend>
+      <div class="fgrid">
+        <label>Canal<select id="f_source"></select></label>
+        <label>Nom du contact<input id="f_contactName"></label>
+        <label class="s2">Téléphone(s)<input id="f_contactTel" type="tel" inputmode="tel" placeholder="ex. 0661 00 00 00 / 0522 00 00 00"></label>
+        <label class="s2">Lien de l’annonce<input id="f_link" type="url" placeholder="https://"></label>
+        <label>Code externe <span class="u">(SAX, agence…)</span><input id="f_code"></label>
+        <label>N° de dossier<input id="f_dossier" placeholder="ex. 1961/2026"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Observations</legend>
+      <textarea id="f_notes" placeholder="Négociable, vue, parking, ascenseur, titre, occupation…"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Photos</legend>
+      <div class="thumbs" id="thumbs"></div>
+      <input type="file" id="photoInput" accept="image/*" multiple hidden>
+      <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button type="button" class="btn sm" id="camBtn">Prendre une photo</button><button type="button" class="btn sm" id="photoBtn">+ Ajouter des photos</button><span class="note" id="photoNote">Les photos sont réduites puis enregistrées dans Valtera. Celle marquée ★ est la photo principale (façade).</span></div>
+    </fieldset>
+  </form>
+  <div class="df">
+    <div class="warnbox" id="dupBox" hidden></div>
+    <button class="btn bad" id="delBtn" type="button">Supprimer</button>
+    <button class="btn pri" id="saveBtn" type="button" style="margin-left:auto">Enregistrer</button>
+  </div>
+</dialog>
+
+<dialog id="view" class="wide">
+  <div class="dh"><h2 id="vTitle"></h2><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" id="vSel">Ajouter à l’étude</button><button class="btn" type="button" id="vCopy">Copier le résumé</button><button class="btn" type="button" id="vNear">Comparables proches</button><button class="btn pri" type="button" id="vEdit">Modifier</button><button class="btn" type="button" data-close>Fermer</button></div></div>
+  <div class="db" id="vBody"></div>
+</dialog>
+
+<dialog id="etude" class="wide">
+  <div class="dh"><h2>Étude de marché</h2><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db" id="eBody">
+    <fieldset>
+      <legend>Bien évalué</legend>
+      <div class="fgrid">
+        <label>N° de dossier<input id="e_dossier" placeholder="ex. 1961/2026"></label>
+        <label>Type de bien<select id="e_type"></select></label>
+        <label>Opération<select id="e_tx"></select></label>
+        <label>Surface retenue <span class="u">(m²)</span><input id="e_surface" inputmode="decimal"></label>
+        <label class="s2">Adresse<input id="e_address"></label>
+        <label class="s2">Position GPS<input id="e_gps" inputmode="decimal" placeholder="ex. 33.5685, -7.5848"></label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" id="eSearch" type="button">Chercher des comparables autour du bien</button><a class="btn sm" id="eSat" target="_blank" rel="noopener" href="#" hidden>Voir le bien en satellite</a></div>
+    </fieldset>
+    <fieldset>
+      <legend>Comparables retenus</legend>
+      <div class="fgrid">
+        <label>Abattement de négociation sur les offres <span class="u">(%)</span><input id="e_nego" inputmode="decimal"></label>
+      </div>
+      <div class="tblwrap"><table class="t" id="eTbl"></table></div>
+      <p class="note" id="eHint"></p>
+    </fieldset>
+    <fieldset>
+      <legend>Synthèse</legend>
+      <div class="bigv" id="eStats"></div>
+      <div class="fgrid">
+        <label><span><span id="eRetLbl">Valeur unitaire retenue</span> <span class="u">(DH/m²)</span></span><input id="e_retenu" inputmode="decimal" placeholder="médiane par défaut"></label>
+      </div>
+      <div class="bigv" id="eValue"></div>
+    </fieldset>
+  </div>
+  <div class="df">
+    <button class="btn" id="eNew" type="button">Nouvelle étude</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="eCsv" type="button">Exporter (CSV)</button>
+      <button class="btn" id="eHtml" type="button">Exporter le rapport</button>
+      <button class="btn pri" id="eSave" type="button">Enregistrer l’étude</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="etudesDlg">
+  <div class="dh"><h2>Mes études de marché</h2><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db" id="etudesBody"></div>
+</dialog>
+
+<dialog id="setDlg">
+  <div class="dh"><h2>Réglages des calculs</h2><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db">
+    <fieldset>
+      <legend>Coefficients de pondération des surfaces</legend>
+      <div class="fgrid">
+        <label>Mezzanine / soupente<input id="s_cm" inputmode="decimal"></label>
+        <label>Cave / sous-sol<input id="s_cc" inputmode="decimal"></label>
+        <label>Terrasse<input id="s_ct" inputmode="decimal"></label>
+      </div>
+      <span class="note">Surface pondérée = principale + mezzanine × coef + cave × coef + terrasse × coef. S’applique aux fiches enregistrées ou modifiées après le changement.</span>
+    </fieldset>
+    <fieldset>
+      <legend>Témoins et études</legend>
+      <div class="fgrid">
+        <label>Un témoin devient ancien après <span class="u">(mois)</span><input id="s_valid" inputmode="numeric"></label>
+        <label>Abattement de négociation par défaut <span class="u">(%)</span><input id="s_nego" inputmode="decimal"></label>
+      </div>
+    </fieldset>
+  </div>
+  <div class="df"><span class="note" id="setNote"></span><span class="note" id="setRO" hidden>Seul le propriétaire peut modifier ces réglages.</span><button class="btn pri" id="setSave" type="button">Enregistrer les réglages</button></div>
+</dialog>
+
+
+<dialog id="uDlg">
+  <div class="dh"><div><h2 id="uTitle">Compte</h2><div class="meta" id="uMail"></div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db">
+    <div class="fgrid">
+      <label class="s2">Rôle<select id="u_role"><option value="collab">Collaborateur : consulte et ajoute des témoins</option><option value="reader">Lecteur : consulte seulement</option></select></label>
+      <label>Accès jusqu’au<input id="u_expires" type="date"></label>
+    </div>
+    <div class="chks"><label class="chk"><input type="checkbox" id="u_visites"> Module Fiches de visite (collaborateur)</label><label class="chk"><input type="checkbox" id="u_export"> Peut exporter (Excel, My Maps, sauvegarde)</label><label class="chk" id="u_activeL"><input type="checkbox" id="u_active"> Accès actif</label></div>
+    <span class="note">Laisse la date vide pour un accès sans limite. Un compte suspendu ou expiré ne voit plus rien ; ses témoins restent dans Valtera.</span>
+  </div>
+  <div class="df"><button class="btn bad" id="uDel" type="button">Retirer l’accès</button><span class="note" id="uNote"></span><button class="btn pri" id="uSave" type="button">Enregistrer</button></div>
+</dialog>
+
+<dialog id="visDlg" class="wide">
+  <div class="dh"><div><h2 id="visTitle">Fiche de visite</h2><div class="meta">Date, visiteur, position, ville et quartier se remplissent tout seuls quand c’est possible.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db" id="visBody"></div>
+  <input type="file" id="vPhotoIn" accept="image/*" multiple hidden><input type="file" id="vCamIn" accept="image/*" capture="environment" hidden>
+  <div class="df"><button class="btn bad" id="visDel" type="button" hidden>Supprimer</button><label class="chk"><input type="checkbox" id="visDone"> Fiche terminée</label><span class="note" id="visNote"></span><span class="note" id="visSigHint"></span>
+    <button class="btn" id="visCopy" type="button">Copier le texte</button><button class="btn" id="visTemoin" type="button" hidden>Créer un témoin</button><button class="btn" id="visShare" type="button" data-share="1" hidden>Partager</button><button class="btn" id="visPdf" type="button">Télécharger (PDF)</button><button class="btn pri" id="visSave" type="button">Enregistrer</button></div>
+</dialog>
+<div id="printArea" aria-hidden="true"></div>
+<dialog id="kindDlg">
+  <div class="dh"><div><h2>Nouvelle fiche</h2><div class="meta">Choisis le type de fiche.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db kinds">
+    <button type="button" class="kindopt" data-kind="bien"><b>Fiche de visite</b><span class="meta">Appartement, villa, maison, local commercial, usine</span></button>
+    <button type="button" class="kindopt" data-kind="terrain"><b>Fiche de visite : Terrain</b><span class="meta">Destination, viabilité, topographie, voie d’accès, servitudes</span></button>
+    <button type="button" class="kindopt" data-kind="avancement"><b>État d’avancement</b><span class="meta">Avancement des travaux par lot et sous-lot, avancement global</span></button>
+  </div>
+</dialog>
+<dialog id="pickDlg" class="wide">
+  <div class="dh"><div><h2>Choisir le point sur la carte</h2><div class="meta">Déplace la carte avec le doigt : le point au centre de la croix sera enregistré.</div></div><button class="btn" type="button" id="pickCancel">Annuler</button></div>
+  <div class="pickwrap"><div id="pickMap" role="application" aria-label="Carte satellite pour choisir un point"></div><div class="pickcross" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 44 44"><g fill="none" stroke-linecap="round"><g stroke="#000" stroke-opacity=".55" stroke-width="4.5"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g><g stroke="#fff" stroke-width="2"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g></g><circle cx="22" cy="22" r="2.2" fill="#e9a948" stroke="#000" stroke-width=".8"/></svg></div></div>
+  <div class="df pickbar"><button class="btn" id="pickMe" type="button">Ma position</button><input id="pickGo" placeholder="Coller des coordonnées…" inputmode="decimal" autocomplete="off" aria-label="Aller à des coordonnées"><span class="num" id="pickTxt"></span><button class="btn pri" id="pickOk" type="button">Valider ce point</button></div>
+</dialog>
+<dialog id="sigDlg">
+  <div class="dh"><div><h2>Ma signature</h2><div class="meta">Elle s’ajoute toute seule dans la case « Signature visiteur » de tes fiches PDF.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db">
+    <div class="sigcur" id="sigCur" hidden><span class="meta">Signature actuelle</span><img id="sigCurImg" alt="Signature actuelle"><button class="btn sm" id="sigDel" type="button">Retirer</button></div>
+    <p class="note">Signe avec le doigt (ou la souris) dans le cadre, ou importe une photo de ta signature sur une feuille blanche.</p>
+    <canvas id="sigPad" class="sigpad" aria-label="Zone de signature"></canvas>
+    <input type="file" id="sigFile" accept="image/*" hidden>
+  </div>
+  <div class="df"><button class="btn" id="sigClear" type="button">Effacer</button><button class="btn" id="sigImport" type="button">Importer une photo</button><span class="note" id="sigNote"></span><button class="btn pri" id="sigSave" type="button">Enregistrer</button></div>
+</dialog>
+<dialog id="imp">
+  <div class="dh"><h2>Importer</h2><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db" id="impBody"></div>
+  <div class="df"><span class="note" id="impProg"></span><button class="btn pri" id="impGo" type="button">Importer</button></div>
+</dialog>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/firebase/firebase-app-compat.js"></script>
+<script src="vendor/firebase/firebase-auth-compat.js"></script>
+<script src="vendor/firebase/firebase-firestore-compat.js"></script>
+<script src="config.js?v=20261120161902"></script>
+<script src="app.js?v=20261120161902"></script>
+</body>
+</html>
