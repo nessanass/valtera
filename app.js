@@ -413,7 +413,6 @@ $("#vEdit").onclick=()=>{$("#view").close();openForm(viewing)};
 $("#vVerify").onclick=async e=>{const c=viewing;if(!c)return;const b=e.currentTarget;b.disabled=true;
   try{const st=await saveItem({...c,status:"Vérifié",verifiedBy:ME.name||ME.email||"",verifiedAt:new Date().toISOString().slice(0,10),updatedAt:Date.now()});$("#view").close();toast(st==="queued"?"Vérification enregistrée sur l’appareil : envoi au retour du réseau.":"Témoin marqué vérifié")}
   catch(er){toast(errMsg(er,"Impossible de marquer ce témoin comme vérifié."))}b.disabled=false};
-$("#vSax").onclick=e=>{if(viewing)copyText(saxText(viewing),e.currentTarget)};
 function summaryText(c){const txl=c.tx==="Location"?"à louer":c.tx==="Pas-de-porte"?"en pas-de-porte":"à vendre";
   const ml=LAND_TYPES.includes(c.type)?"construit":(c.type==="Local commercial"?"RDC":"surface");
   const sp=[c.sMain?ml+" "+fmtS(c.sMain)+" m²":"",c.sMezz?"mezzanine "+fmtS(c.sMezz)+" m²":"",c.sCave?"sous-sol "+fmtS(c.sCave)+" m²":"",c.sTerr?"terrasse "+fmtS(c.sTerr)+" m²":"",c.sLand?"terrain "+fmtS(c.sLand)+" m²":""].filter(Boolean);
@@ -956,12 +955,11 @@ function initMap(){
   const o={maxZoom:20,maxNativeZoom:19};
   const imagery=()=>L.tileLayer(ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:1,attribution:"Imagerie © Esri, Maxar, Earthstar Geographics"});
   const sat=imagery();
-  const roads=L.tileLayer(ESRI+"Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:2});
   const names=L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3});
-  const hyb=L.layerGroup([imagery(),roads,names]);
+  const hyb=L.layerGroup([imagery(),names]);
   const plan=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,zIndex:1,attribution:"© OpenStreetMap"});
   const bases={hyb,sat,plan};(bases[LS.get("vt_base","hyb")]||hyb).addTo(map);
-  L.control.layers({"Satellite + noms et rues":hyb,"Satellite seul":sat,"Plan":plan},null,{position:"topright",autoZIndex:false}).addTo(map);
+  L.control.layers({"Satellite + noms":hyb,"Satellite seul":sat,"Plan":plan},null,{position:"topright",autoZIndex:false}).addTo(map);
   map.on("baselayerchange",e=>{const k=e.layer===hyb?"hyb":e.layer===sat?"sat":e.layer===plan?"plan":null;if(k)LS.set("vt_base",k)});
   L.control.scale({imperial:false}).addTo(map);
   ovLayer=L.layerGroup().addTo(map);ptsLayer=L.layerGroup().addTo(map);meLayer=L.layerGroup().addTo(map);
@@ -1706,7 +1704,6 @@ function pickOnMap(init){return new Promise(res=>{
   pickRes=res;$("#pickGo").value="";$("#pickDlg").showModal();
   if(!pickMap){pickMap=L.map("pickMap",{preferCanvas:true,zoomControl:true});const o={maxZoom:20,maxNativeZoom:19};
     L.tileLayer(ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:1,attribution:"Imagerie © Esri, Maxar"}).addTo(pickMap);
-    L.tileLayer(ESRI+"Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:2}).addTo(pickMap);
     L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3}).addTo(pickMap);
     L.control.scale({imperial:false}).addTo(pickMap);pickPts=L.layerGroup().addTo(pickMap);pickMap.on("move",updPick)}
   pickPts.clearLayers();items.forEach(c=>{const g=gpsOf(c);if(g)L.circleMarker(g,{radius:5,color:"#ffffff",weight:1,fillColor:TCOL[c.type]||"#888888",fillOpacity:.9,interactive:false}).addTo(pickPts)});
@@ -1923,26 +1920,3 @@ $("#zoneClear").onclick=()=>{zMode=null;zPts=[];setZone(null)};
 $("#zoneMap").onclick=()=>{view="map";LS.set("mc_view",view);mv=null;shown=0;render();window.scrollTo({top:0})};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&zMode){zMode=null;zPts=[];zoneCursor();zoneUi();if(lastMapR)drawMap(lastMapR)}});
 
-/* ===================== copie au format SAX (ordre des rubriques du formulaire) ===================== */
-const SAX_TYPE={"Appartement":"Appartement","Villa":"Villa Sans Copropriété","Maison":"Logement unifamilial","Local commercial":"Local Commercial","Bureau":"Bureau","Plateau de bureaux":"Bureau","Terrain":"Terrain Urbain","Entrepôt / dépôt":"Entrepôt / Dépôt","Immeuble":"Immeuble de plusieurs éléments sans eclatement","Usine":"Industrie ou atelier"};
-const SAX_BATI={"Mitoyen":"Bâtiment entre mitoyen","Isolé":"Bâtiment isolé","Groupement d’immeubles":"Bâtiment faisant Partie d′un groupement d′immeubles","Résidence fermée":"Résidence sécurisée avec espaces en commun","Villa / maison individuelle":"Bâtiment isolé"};
-const SAX_STAND={"Économique":"Bas","Moyen standing":"Moyen","Haut standing":"Haut","Luxe":"Très Haut"};
-const SAX_ETAT={"Neuf":"Très Bon","Bon état":"Bon","Moyen":"Régulier","À rénover":"Mauvais","En construction":"En construction","Gros œuvre":"En construction"};
-function saxText(c){const g=gpsOf(c),u=ppmOf(c),L2=[],add=(k,v)=>{if(v!=null&&v!=="")L2.push(k+" : "+v)},sec=t=>L2.push("","— "+t+" —");
-  const real=(c.sMain||0)+(c.sMezz||0)+(c.sCave||0)+(c.sTerr||0);
-  L2.push("Témoin "+(c.ref||"")+" (Valtera)");
-  sec("Adresse");add("Pays","Maroc");add("Région",c.region);add("Province",c.province);add("Commune",c.commune);add("Quartier",c.district);add("Rue",c.address);add("Niveau",c.floor);add("Code postal",c.cp);
-  if(g){add("Latitude",g[0]);add("Longitude",g[1])}
-  sec("Type de témoin");add("Type d’opération",c.tx==="Location"?"Location":"Vente");add("Typologie de bien",SAX_TYPE[c.type]||c.type);
-  add("Typologie",LAND_TYPES.includes(c.type)?"Terrain":SAX_BATI[c.bati]||"");add("Orientation",c.orient);add("Vues",c.vue);
-  add("Environnement commercial",c.envCom);add("Environnement urbain",c.envUrb);add("Niveau de standing",SAX_STAND[c.standing]||c.standing);
-  if(c.sLand){sec("Terrain");add("Parcelle",fmtS(c.sLand)+" m²")}
-  sec("Construction");
-  if(c.surface&&basisOf(c)!=="terrain")add("Surface vendable",fmtS(c.surface)+" m²"+(real&&real!==c.surface?" (pondérée ; réelle "+fmtS(real)+" m² : "+[c.sMain?"principale "+fmtS(c.sMain):"",c.sMezz?"mezzanine "+fmtS(c.sMezz):"",c.sCave?"sous-sol "+fmtS(c.sCave):"",c.sTerr?"terrasse "+fmtS(c.sTerr):""].filter(Boolean).join(" + ")+")":""));
-  add("Nombre de niveau",c.niveaux);add("Étages sous-sol",c.sCave?"1":"");add("Pièces",c.rooms);add("Age",c.age?c.age+" ans":"");add("État de conservation",SAX_ETAT[c.state]||c.state);
-  sec("Prix HT");add("Valeur offerte",c.price!=null?fmt(c.price)+" Dhs"+(c.tx==="Location"?" / mois":""):"");add("Valeur unitaire",u?fmt(Math.round(u))+" Dhs/m²":"");
-  sec("Source du témoin");add("Source du témoin",c.nature==="Transaction"?"Transaction":c.nature==="Expertise"?"Expertise":/site|avito|mubawab|yakeey|agenz/i.test(c.source||"")?"Site Web":c.nature==="Offre"||!c.nature?"Offre":"Autre");
-  add("Vérifié par",c.verifiedBy);add("Vérifié le",c.verifiedAt?new Date(c.verifiedAt).toLocaleDateString("fr-FR"):"");
-  add("URL de référence",c.link);add("Téléphone",c.contactTel);add("Contact",c.contactName);
-  if(c.notes){sec("Observations");L2.push(c.notes)}
-  return L2.join("\n")}
