@@ -955,7 +955,8 @@ function initMap(){
   const o={maxZoom:20,maxNativeZoom:19};
   const imagery=()=>L.tileLayer(ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:1,attribution:"Imagerie © Esri, Maxar, Earthstar Geographics"});
   const sat=imagery();
-  const names=L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3});
+  /* noms des villes, quartiers, rues et boulevards : texte seul, sans le tracé coloré des routes */
+  const names=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,maxNativeZoom:18,zIndex:3,attribution:"Noms © OpenStreetMap, CARTO"});
   const hyb=L.layerGroup([imagery(),names]);
   const plan=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,zIndex:1,attribution:"© OpenStreetMap"});
   const bases={hyb,sat,plan};(bases[LS.get("vt_base","hyb")]||hyb).addTo(map);
@@ -1704,7 +1705,7 @@ function pickOnMap(init){return new Promise(res=>{
   pickRes=res;$("#pickGo").value="";$("#pickDlg").showModal();
   if(!pickMap){pickMap=L.map("pickMap",{preferCanvas:true,zoomControl:true});const o={maxZoom:20,maxNativeZoom:19};
     L.tileLayer(ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:1,attribution:"Imagerie © Esri, Maxar"}).addTo(pickMap);
-    L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3}).addTo(pickMap);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,maxNativeZoom:18,zIndex:3,attribution:"Noms © OpenStreetMap, CARTO"}).addTo(pickMap);
     L.control.scale({imperial:false}).addTo(pickMap);pickPts=L.layerGroup().addTo(pickMap);pickMap.on("move",updPick)}
   pickPts.clearLayers();items.forEach(c=>{const g=gpsOf(c);if(g)L.circleMarker(g,{radius:5,color:"#ffffff",weight:1,fillColor:TCOL[c.type]||"#888888",fillOpacity:.9,interactive:false}).addTo(pickPts)});
   const g0=coordsFrom(init||"");const g=g0||lastPick||[33.5731,-7.5898];
