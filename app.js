@@ -949,6 +949,16 @@ $("#csvInput").onchange=async e=>{
 let map=null,ptsLayer=null,ovLayer=null,mv=null,lastMapR=[],markers=[],meLayer=null;
 const ESRI="https://server.arcgisonline.com/ArcGIS/rest/services/";
 function kfmt(v){return v>=1000?(Math.round(v/100)/10).toString().replace(".",",")+"k":Math.round(v)+""}
+/* noms des rues et boulevards seuls : on garde le texte (et son contour clair) des tuiles « transport » d'Esri
+   et on efface le tracé coloré des routes */
+function streetLabels(){const Lb=L.GridLayer.extend({createTile(c,done){const cv=document.createElement("canvas");cv.width=cv.height=256;const im=new Image();im.crossOrigin="anonymous";
+  im.onload=()=>{try{const x=cv.getContext("2d");x.drawImage(im,0,0);const id=x.getImageData(0,0,256,256),d=id.data,N=256,t=new Uint8Array(N*N),hl=new Uint8Array(N*N);
+    for(let i=0;i<N*N;i++){const r=d[i*4],g=d[i*4+1],b=d[i*4+2],mx=Math.max(r,g,b);if(d[i*4+3]>90&&mx<105&&mx-Math.min(r,g,b)<45)t[i]=1}
+    for(let y=0;y<N;y++)for(let xx=0;xx<N;xx++){if(!t[y*N+xx])continue;for(let dy=-2;dy<=2;dy++){const yy=y+dy;if(yy<0||yy>=N)continue;for(let dx=-2;dx<=2;dx++){const x2=xx+dx;if(x2>=0&&x2<N)hl[yy*N+x2]=1}}}
+    for(let i=0;i<N*N;i++){if(t[i])continue;if(hl[i]&&Math.min(d[i*4],d[i*4+1],d[i*4+2])>170){d[i*4]=d[i*4+1]=d[i*4+2]=255;continue}d[i*4+3]=0}
+    x.putImageData(id,0,0)}catch(e){}done(null,cv)};
+  im.onerror=()=>done(null,cv);im.src=ESRI+"Reference/World_Transportation/MapServer/tile/"+c.z+"/"+c.y+"/"+c.x;return cv}});
+  return new Lb({maxZoom:20,maxNativeZoom:19,zIndex:4})}
 function initMap(){
   if(map||!window.L)return;
   map=L.map("map",{preferCanvas:true,zoomControl:true}).setView([33.573,-7.59],12);
@@ -957,7 +967,7 @@ function initMap(){
   const sat=imagery();
   /* noms des villes, quartiers, rues et boulevards : texte seul, sans le tracé coloré des routes */
   const names=L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3});
-  const hyb=L.layerGroup([imagery(),names]);
+  const hyb=L.layerGroup([imagery(),names,streetLabels()]);
   const plan=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,zIndex:1,attribution:"© OpenStreetMap"});
   const bases={hyb,sat,plan};(bases[LS.get("vt_base","hyb")]||hyb).addTo(map);
   L.control.layers({"Satellite + noms":hyb,"Satellite seul":sat,"Plan":plan},null,{position:"topright",autoZIndex:false}).addTo(map);
@@ -1705,7 +1715,7 @@ function pickOnMap(init){return new Promise(res=>{
   pickRes=res;$("#pickGo").value="";$("#pickDlg").showModal();
   if(!pickMap){pickMap=L.map("pickMap",{preferCanvas:true,zoomControl:true});const o={maxZoom:20,maxNativeZoom:19};
     L.tileLayer(ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:1,attribution:"Imagerie © Esri, Maxar"}).addTo(pickMap);
-    L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3}).addTo(pickMap);
+    L.tileLayer(ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{...o,zIndex:3}).addTo(pickMap);streetLabels().addTo(pickMap);
     L.control.scale({imperial:false}).addTo(pickMap);pickPts=L.layerGroup().addTo(pickMap);pickMap.on("move",updPick)}
   pickPts.clearLayers();items.forEach(c=>{const g=gpsOf(c);if(g)L.circleMarker(g,{radius:5,color:"#ffffff",weight:1,fillColor:TCOL[c.type]||"#888888",fillOpacity:.9,interactive:false}).addTo(pickPts)});
   const g0=coordsFrom(init||"");const g=g0||lastPick||[33.5731,-7.5898];
