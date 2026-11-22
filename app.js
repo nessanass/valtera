@@ -84,7 +84,7 @@ function applyRoleUi(){
 /* ===================== Firebase ===================== */
 let auth=null,fdb=null,unsubs=[];
 const PUB={},PRIV={};let mergeT=null,syncMeta={fromCache:true,hasPendingWrites:false};
-const ITEM_KEYS=["tf","date","tx","type","price","surface","sMain","sMezz","sCave","sTerr","sLand","basis","avance","loyer","city","district","address","gps","floor","rooms","state","standing","age","nature","status","source","link","code","dossier","notes","photos","createdAt","updatedAt"];
+const ITEM_KEYS=["region","province","commune","cp","niveaux","bati","facades","vue","orient","envCom","envUrb","ascenseur","parking","verifiedBy","verifiedAt","tf","date","tx","type","price","surface","sMain","sMezz","sCave","sTerr","sLand","basis","avance","loyer","city","district","address","gps","floor","rooms","state","standing","age","nature","status","source","link","code","dossier","notes","photos","createdAt","updatedAt"];
 const NUMKEYS=new Set(["price","surface","sMain","sMezz","sCave","sTerr","sLand","avance","loyer","age","createdAt","updatedAt"]);
 function initFirebase(){
   if(!window.firebase||!CFG.firebase||!CFG.firebase.apiKey)return false;
@@ -209,18 +209,19 @@ function buildStatic(){
   TYPES.forEach(t=>$("#fType").add(new Option(t,t)));TXS.forEach(t=>$("#fTx").add(new Option(t,t)));
   STATUS.forEach(t=>$("#fStatus").add(new Option(t,t)));NATURES.forEach(t=>$("#fNature").add(new Option(t,t)));
   fillSelect($("#f_type"),TYPES);fillSelect($("#f_nature"),NATURES,"—");fillSelect($("#f_status"),STATUS,"—");
-  fillSelect($("#f_state"),STATES,"—");fillSelect($("#f_standing"),STANDINGS,"—");fillSelect($("#f_source"),SOURCES,"—");
+  fillSelect($("#f_state"),STATES,"—");fillSelect($("#f_standing"),STANDINGS,"—");fillSelect($("#fStanding"),STANDINGS,"Tous");fillSelect($("#fState"),STATES,"Tous");fillSelect($("#f_source"),SOURCES,"—");
   fillSelect($("#e_type"),TYPES,"Tous types");fillSelect($("#e_tx"),TXS);
   TXS.forEach(t=>$("#txSeg").append(h("button",{type:"button","data-v":t,text:t})));
 }
 
 /* ===================== filtres et rendu ===================== */
-const FIDS=["fBy","fType","fTx","fStatus","fNature","fCity","fDistrict","fPmin","fPmax","fSmin","fSmax","fUmin","fUmax","fSince","near"];
+const FIDS=["fLmin","fLmax","fAmin","fAmax","fUntil","fStanding","fState","fFacades","fBy","fType","fTx","fStatus","fNature","fCity","fDistrict","fPmin","fPmax","fSmin","fSmax","fUmin","fUmax","fSince","near"];
 function activeFilters(){let n=FIDS.filter(i=>$("#"+i).value.trim()).length;if($("#fPhotos").checked)n++;if($("#fRecent").checked)n++;return n}
 function filtered(){
   const q=$("#q").value.trim().toLowerCase();
   const ft=$("#fType").value,fx=$("#fTx").value,fs=$("#fStatus").value,fn=$("#fNature").value,fc=$("#fCity").value,fd=$("#fDistrict").value.trim().toLowerCase();
   const pmin=numIn($("#fPmin").value),pmax=numIn($("#fPmax").value),smin=numIn($("#fSmin").value),smax=numIn($("#fSmax").value),umin=numIn($("#fUmin").value),umax=numIn($("#fUmax").value);
+  const lmin=numIn($("#fLmin").value),lmax=numIn($("#fLmax").value),amin=numIn($("#fAmin").value),amax=numIn($("#fAmax").value),until=$("#fUntil").value,fst=$("#fStanding").value,fet=$("#fState").value,ffa=$("#fFacades").value;
   const fby=$("#fBy").value,since=$("#fSince").value,ph=$("#fPhotos").checked,rec=$("#fRecent").checked;
   let r=items.filter(c=>{
     if(natView==="tr"&&c.nature!=="Transaction")return false;if(natView==="off"&&c.nature==="Transaction")return false;
@@ -231,10 +232,14 @@ function filtered(){
     if(pmin!=null&&!(c.price>=pmin))return false;if(pmax!=null&&!(c.price<=pmax))return false;
     if(smin!=null&&!(c.surface>=smin))return false;if(smax!=null&&!(c.surface<=smax))return false;
     const u=ppmOf(c);if(umin!=null&&!(u>=umin))return false;if(umax!=null&&!(u<=umax))return false;
-    if(since&&!(c.date&&c.date>=since))return false;
+    if(since&&!(c.date&&c.date>=since))return false;if(until&&!(c.date&&c.date<=until))return false;
+    if(lmin!=null&&!(c.sLand>=lmin))return false;if(lmax!=null&&!(c.sLand<=lmax))return false;
+    if(amin!=null&&!(c.age>=amin))return false;if(amax!=null&&!(c.age<=amax))return false;
+    if(fst&&c.standing!==fst)return false;if(fet&&c.state!==fet)return false;if(ffa&&c.facades!==ffa)return false;
+    if(zone&&!inZone(gpsOf(c)))return false;
     if(ph&&!(c.photos&&c.photos.length))return false;
     if(rec&&isOld(c))return false;
-    if(q&&![c.tf,c.vendeur,c.acheteur,c.district,c.address,c.city,c.contactName,c.contactTel,c.notes,c.type,c.ref,c.code,c.dossier,c.floor,c.source].join(" ").toLowerCase().includes(q))return false;
+    if(q&&![c.commune,c.province,c.niveaux,c.facades,c.vue,c.tf,c.vendeur,c.acheteur,c.district,c.address,c.city,c.contactName,c.contactTel,c.notes,c.type,c.ref,c.code,c.dossier,c.floor,c.source].join(" ").toLowerCase().includes(q))return false;
     return true;
   });
   const nv=$("#near").value.trim(),center=nv?coordsFrom(nv):null,rad=+$("#radius").value;
@@ -264,7 +269,7 @@ function render(){
   renderKpis(r);
   $$("#views button").forEach(b=>b.classList.toggle("on",b.dataset.v===view));
   $("#list").hidden=view!=="list";$("#tblWrap").hidden=view!=="table";$("#mapWrap").hidden=view!=="map";$("#kpis").hidden=view==="map"&&window.innerWidth<700;
-  fillAuthorSel("#fBy",items);natCounts();syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
+  fillAuthorSel("#fBy",items);natCounts();zoneUi(r.length);syncTabs();if(view==="list")renderCards(r);else if(view==="table")renderTable(r);else{$("#moreBtn").hidden=true;drawMap(r)}
   renderTray();
 }
 function renderKpis(r){
@@ -312,7 +317,7 @@ function renderCards(r){
     const bd=h("div",{class:"bd"},
       h("div",{class:"top"},h("div",{class:"pills"},c.nature==="Transaction"?h("span",{class:"pill st-tr",text:"Transaction"}):null,c.status?h("span",{class:"pill "+statusClass(c.status),text:c.status}):h("span",{class:"pill",text:"Sans statut"}),isOld(c)?h("span",{class:"pill st-old",text:"Ancien"}):null),pick),
       h("div",{class:"date",text:[c.date?(c.nature==="Transaction"?"Vendu le ":"")+new Date(c.date).toLocaleDateString("fr-FR"):"Sans date",c.nature&&c.nature!=="Offre"&&c.nature!=="Transaction"?c.nature:"",c.source,c.createdBy&&c.createdBy!==ME.uid?"par "+(c.byName||"un membre"):""].filter(Boolean).join(" · ")}),
-      h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:c.ref||"—"}),h("span",{class:"sub",text:[c.type||"Type non renseigné",c.floor,c.tf?"TF "+c.tf:""].filter(Boolean).join(" · ")})),
+      h("div",{class:"kv"},h("span",{class:"k",text:"Réf."}),h("span",{class:"v num",text:c.ref||"—"}),h("span",{class:"sub",text:[c.type||"Type non renseigné",c.floor,c.niveaux?"imm. "+c.niveaux:"",c.facades==="Angle"?"angle":"",c.tf?"TF "+c.tf:""].filter(Boolean).join(" · ")})),
       h("div",{class:"price"},fmt(c.price),h("small",{text:priceSuf(c.tx)})),
       surfLine(c),
       c._d!=null?h("div",{class:"dist"},ic("pin",14),"à "+(c._d>=1000?(c._d/1000).toFixed(2).replace(".",",")+" km":Math.round(c._d)+" m")):null,
@@ -375,7 +380,7 @@ let viewing=null;
 function openView(c){
   viewing=c;
   $("#vTitle").textContent=[c.type,c.tx,[c.district,c.city].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
-  $("#vEdit").hidden=!canEditItem(c);$("#vSel").textContent=sel.has(c.id)?"Retirer de l’étude":"Ajouter à l’étude";
+  $("#vEdit").hidden=!canEditItem(c);$("#vVerify").hidden=!canEditItem(c)||c.status==="Vérifié";$("#vSel").textContent=sel.has(c.id)?"Retirer de l’étude":"Ajouter à l’étude";
   const B=$("#vBody");B.innerHTML="";
   const dl=rows=>{const d=h("dl",{class:"dl"});rows.filter(r=>r[1]!=null&&r[1]!==""&&r[1]!=="—").forEach(([k,v])=>d.append(h("dt",{text:k}),h("dd",null,v)));return d};
   const u=ppmOf(c);
@@ -391,13 +396,13 @@ function openView(c){
       ["Avance",c.avance?h("span",{class:"num",text:fmt(c.avance)+" DH"}):null],
       [c.tx==="Vente"?"Loyer actuel":"Loyer mensuel",c.loyer?h("span",{class:"num",text:fmt(c.loyer)+" DH / mois"}):null]])),
     h("section",null,h("h3",{class:"vh",text:"Localisation"}),dl([
-      ["Ville",c.city],["Quartier",c.district],["Adresse",c.address],["Étage",c.floor],
+      ["Ville",c.city],["Quartier",c.district],["Commune",c.commune],["Province",c.province],["Région",c.region],["Code postal",c.cp],["Adresse",c.address],["Étage",c.floor],
       ["GPS",g?h("span",null,h("span",{class:"num",text:gpsStr(g)}),h("a",{class:"btn sm copy",href:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(gpsStr(g).replace(/\s/g,"")),target:"_blank",rel:"noopener",text:"Google Maps"}),h("a",{class:"btn sm copy",href:"https://www.google.com/maps/dir/?api=1&destination="+g[0]+","+g[1],target:"_blank",rel:"noopener",text:"Itinéraire"}),h("button",{class:"btn sm copy",type:"button",text:"Sur la carte",onclick:()=>{$("#view").close();showOnMap(c)}})):null]])),
-    h("section",null,h("h3",{class:"vh",text:"Bien"}),dl([["Pièces",c.rooms],["État",c.state],["Standing",c.standing],["Âge",c.age?c.age+" ans":null]])),
+    h("section",null,h("h3",{class:"vh",text:"Bien"}),dl([["Immeuble",c.bati],["Niveaux",c.niveaux],["Façades",c.facades],["Donne sur",c.vue],["Orientation",c.orient],["Env. commercial",c.envCom],["Env. urbain",c.envUrb],["Ascenseur",c.ascenseur],["Parking",c.parking],["Pièces",c.rooms],["État",c.state],["Standing",c.standing],["Âge",c.age?c.age+" ans":null]])),
     h("section",null,h("h3",{class:"vh",text:"Source et suivi"}),dl([
       ["Nature",c.nature],["Titre foncier",c.tf?h("b",{class:"num",text:c.tf}):null],["Vendeur",c.vendeur],["Acheteur",c.acheteur],["Statut",c.status?h("span",{class:"chip "+statusClass(c.status),text:c.status}):null],["Canal",c.source],["Contact",c.contactName],["Téléphone",tel],
       ["Annonce",c.link?h("a",{href:c.link,target:"_blank",rel:"noopener",text:"Ouvrir l’annonce"}):null],
-      ["Référence",c.ref?h("b",{class:"num",text:c.ref}):null],["Code externe",c.code],["Dossier",c.dossier],["Ajouté par",c.byName],
+      ["Référence",c.ref?h("b",{class:"num",text:c.ref}):null],["Code externe",c.code],["Dossier",c.dossier],["Ajouté par",c.byName],["Vérifié par",c.verifiedBy?c.verifiedBy+(c.verifiedAt?" le "+new Date(c.verifiedAt).toLocaleDateString("fr-FR"):""):null],
       [c.nature==="Transaction"?"Vendu le":"Relevé le",c.date?new Date(c.date).toLocaleDateString("fr-FR")+(isOld(c)?" (ancien)":""):"Sans date"],
       ["Modifié le",c.updatedAt?new Date(c.updatedAt).toLocaleDateString("fr-FR"):null]]))));
   if(c.notes)B.append(h("section",null,h("h3",{class:"vh",text:"Observations"}),h("p",{class:"pre",text:c.notes})));
@@ -405,6 +410,10 @@ function openView(c){
   if(!$("#view").open)$("#view").showModal();
 }
 $("#vEdit").onclick=()=>{$("#view").close();openForm(viewing)};
+$("#vVerify").onclick=async e=>{const c=viewing;if(!c)return;const b=e.currentTarget;b.disabled=true;
+  try{const st=await saveItem({...c,status:"Vérifié",verifiedBy:ME.name||ME.email||"",verifiedAt:new Date().toISOString().slice(0,10),updatedAt:Date.now()});$("#view").close();toast(st==="queued"?"Vérification enregistrée sur l’appareil : envoi au retour du réseau.":"Témoin marqué vérifié")}
+  catch(er){toast(errMsg(er,"Impossible de marquer ce témoin comme vérifié."))}b.disabled=false};
+$("#vSax").onclick=e=>{if(viewing)copyText(saxText(viewing),e.currentTarget)};
 function summaryText(c){const txl=c.tx==="Location"?"à louer":c.tx==="Pas-de-porte"?"en pas-de-porte":"à vendre";
   const ml=LAND_TYPES.includes(c.type)?"construit":(c.type==="Local commercial"?"RDC":"surface");
   const sp=[c.sMain?ml+" "+fmtS(c.sMain)+" m²":"",c.sMezz?"mezzanine "+fmtS(c.sMezz)+" m²":"",c.sCave?"sous-sol "+fmtS(c.sCave)+" m²":"",c.sTerr?"terrasse "+fmtS(c.sTerr)+" m²":"",c.sLand?"terrain "+fmtS(c.sLand)+" m²":""].filter(Boolean);
@@ -420,7 +429,7 @@ async function copyText(t,btn){try{await navigator.clipboard.writeText(t);if(btn
 
 /* ===================== fiche : saisie ===================== */
 let editing=null,tx="Vente",basis="bati",basisTouched=false,photos=[],lastEdited="price",shot=null,delArmed=false,dupOk=false;
-const TXT=["tf","vendeur","acheteur","type","nature","status","date","city","district","address","gps","floor","rooms","state","standing","source","contactName","contactTel","link","code","dossier","notes"];
+const TXT=["region","province","commune","cp","niveaux","bati","facades","vue","orient","envCom","envUrb","ascenseur","parking","tf","vendeur","acheteur","type","nature","status","date","city","district","address","gps","floor","rooms","state","standing","source","contactName","contactTel","link","code","dossier","notes"];
 const NUMS=["sMain","sMezz","sCave","sTerr","sLand","price","avance","loyer","age"];
 function setTx(v){tx=v;$$("#txSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
   $("#priceLbl").textContent=v==="Location"?"Loyer mensuel":v==="Pas-de-porte"?"Montant du pas-de-porte":"Prix demandé";
@@ -487,6 +496,9 @@ function readForm(){
   o.price=o.price!=null?Math.round(o.price):null;
   o.surface=retained();
   if(o.tx==="Location")o.loyer=null;else o.avance=null;
+  o.verifiedBy=editing?.verifiedBy||"";o.verifiedAt=editing?.verifiedAt||"";
+  if(o.status==="Vérifié"&&(!editing||editing.status!=="Vérifié"||!o.verifiedBy)){o.verifiedBy=ME.name||ME.email||"";o.verifiedAt=new Date().toISOString().slice(0,10)}
+  if(o.status!=="Vérifié"){o.verifiedBy="";o.verifiedAt=""}
   return o;
 }
 function findDupes(o){const g=gpsOf(o);if(!g)return [];return items.filter(x=>{if(x.id===o.id||x.tx!==o.tx)return false;const k=gpsOf(x);if(!k||distM(g,k)>40)return false;
@@ -628,7 +640,7 @@ function smartParse(raw){
   const fm=eta.match(/^(?:(rdc|rez[- ]de[- ]chauss[ée]e|r\s*\+?\s*0)|(\d+)\s*(?:er|ère|re|e|ème|eme|è)?)\s*(?:[ée]tage)?\s*\.?$/i);
   if(fm)out.floor=fm[1]?"RDC":(fm[2]==="0"?"RDC":fm[2]==="1"?"1er étage":fm[2]+"e étage");
   const nbe=LBL(/(?:^|\n|;)[ \t]*(?:nb|nombre)\.?[ \t]*(?:d['’][ \t]*)?[ée]tages?[ \t]*:[ \t]*([^\n;]*)/i)||(fm?"":eta),rpl=nbe.match(/r\s*\??\s*\+\s*(\d+)/i);
-  if(rpl)out.notes.push("Immeuble R+"+rpl[1]+".");
+  if(rpl)out.niveaux="R+"+rpl[1];
   const cnt=re=>{const v=LBL(re);const n=v.match(/^(\d+)/);return n?+n[1]:null};
   const nCh=cnt(/(?:^|\n|;)[ \t]*(?:ch|chambres?|chbr)[ \t]*:[ \t]*([^\n;]*)/i),nSa=cnt(/(?:^|\n|;)[ \t]*salons?[ \t]*:[ \t]*([^\n;]*)/i),nSdb=cnt(/(?:^|\n|;)[ \t]*(?:sdb|salles? de bains?)[ \t]*:[ \t]*([^\n;]*)/i);
   if(nCh!=null||nSa!=null||nSdb!=null)out.rooms=[nCh!=null?nCh+" ch":"",nSa?nSa+" salon":"",nSdb?nSdb+" sdb":""].filter(Boolean).join(" + ");
@@ -636,7 +648,10 @@ function smartParse(raw){
   const eq=[yn(/(?:^|\n|;)[ \t]*balcons?[ \t]*:[ \t]*([^\n;]*)/i,"balcon"),yn(/(?:^|\n|;)[ \t]*(?:parking|garage)[ \t]*:[ \t]*([^\n;]*)/i,"parking"),yn(/(?:^|\n|;)[ \t]*ascenseurs?[ \t]*:[ \t]*([^\n;]*)/i,"ascenseur")].filter(Boolean);
   if(eq.length)out.notes.push(eq.join(", ").replace(/^./,x=>x.toUpperCase())+".");
   const cour=t.match(/(\d+(?:[.,]\d+)?)\s*(?:m²|m2|m)?\s*(?:de\s*)?cour\b/);if(cour)out.notes.push("Cour : "+cour[1]+" m² (non comptée dans la surface).");
-  if(/(?:^|\n)[ \t]*angle\b/i.test(src)&&!out.address)out.notes.push("Situé à l’angle.");
+  if(/(?:^|\n)[ \t]*angle\b/i.test(src)||/\b(?:à|a|en|d['’])\s*l['’]?angle\b|\bangle\s+(?:rue|bd|boulevard|avenue|av)\b/i.test(src))out.facades="Angle";
+  if(!out.niveaux){const rr=t.match(/\br\s*\+\s*(\d{1,2})\b/);if(rr)out.niveaux="R+"+rr[1]}
+  const ynv=re=>{const v=LBL(re).toLowerCase();return /^(non|no|sans|0)\b/.test(v)?"Non":/^(oui|yes|avec|\d)/.test(v)?"Oui":""};
+  const pkv=ynv(/(?:^|\n|;)[ \t]*(?:parking|garage)[ \t]*:[ \t]*([^\n;]*)/i),asv=ynv(/(?:^|\n|;)[ \t]*ascenseurs?[ \t]*:[ \t]*([^\n;]*)/i);if(pkv)out.parking=pkv;if(asv)out.ascenseur=asv;
   const tfv=LBL(/(?:^|\n|;)[ \t]*(?:t\.?\s?f\.?|titre(?:\s+foncier)?|r[ée]quisition)[ \t]*(?:n[°o]\.?)?[ \t]*:[ \t]*([^\n;]*)/i);if(!EMPTY(tfv))out.tf=tfv.toUpperCase().replace(/\s+/g," ");
   const ven=LBL(/(?:^|\n|;)[ \t]*vendeurs?[ \t]*:[ \t]*([^\n;]*)/i),ach=LBL(/(?:^|\n|;)[ \t]*(?:acheteurs?|acqu[ée]reurs?)[ \t]*:[ \t]*([^\n;]*)/i);
   if(!EMPTY(ven))out.vendeur=ven;if(!EMPTY(ach))out.acheteur=ach;
@@ -661,7 +676,7 @@ function applyParsed(p,src,label){
   setV("district",p.district,"quartier");setV("address",p.address,"adresse");setV("floor",p.floor,"étage");setV("rooms",p.rooms,"pièces");
   if(p.state&&STATES.includes(p.state))setV("state",p.state,"état");if(p.standing&&STANDINGS.includes(p.standing))setV("standing",p.standing,"standing");
   setV("link",p.link,"lien");setV("contactName",p.contactName,"contact");
-  setV("tf",p.tf,"titre foncier");setV("vendeur",p.vendeur,"vendeur");setV("acheteur",p.acheteur,"acheteur");setV("date",p.date,"date");
+  setV("niveaux",p.niveaux,"niveaux");setV("facades",p.facades,"façades");setV("parking",p.parking,"parking");setV("ascenseur",p.ascenseur,"ascenseur");setV("tf",p.tf,"titre foncier");setV("vendeur",p.vendeur,"vendeur");setV("acheteur",p.acheteur,"acheteur");setV("date",p.date,"date");
   if(p.nature==="Transaction"){$("#f_nature").value="Transaction";filled.push("transaction");if(!$("#f_source").value){ensureOpt($("#f_source"),"Conservation foncière");$("#f_source").value="Conservation foncière"}}updTrans();
   if(src){const cur=$("#f_notes").value.trim();const add=[...(p.notes||[]),"Note d’origine : "+src.replace(/\s*\n\s*/g," ; ")].join(" ");if(!cur.includes(src.slice(0,40)))$("#f_notes").value=(cur?cur+"\n":"")+add}
   updCalc();if(coordsFrom($("#f_gps").value))temGeocode();
@@ -812,9 +827,9 @@ $("#mPaste").onclick=()=>{closeMenu();openForm()};
 /* ===================== export ===================== */
 $("#exportBtn").onclick=async()=>{closeMenu();
   const r=filtered();if(!r.length){toast("Rien à exporter.");return}
-  const head=["Date","Opération","Type","Prix (DH)","Surface retenue (m²)","Prix/m²","Principale","Mezzanine","Cave","Terrasse","Terrain","Avance","Loyer","Ville","Quartier","Adresse","GPS","Étage","Pièces","État","Standing","Nature","Statut","Canal","Contact","Téléphone","Code","Dossier","Lien","Observations","Photos","Titre foncier","Vendeur","Acheteur"];
+  const head=["Date","Opération","Type","Prix (DH)","Surface retenue (m²)","Prix/m²","Principale","Mezzanine","Cave","Terrasse","Terrain","Avance","Loyer","Ville","Quartier","Adresse","GPS","Étage","Pièces","État","Standing","Nature","Statut","Canal","Contact","Téléphone","Code","Dossier","Lien","Observations","Photos","Titre foncier","Vendeur","Acheteur","Commune","Province","Région","Code postal","Immeuble","Niveaux","Façades","Donne sur","Orientation","Env. commercial","Env. urbain","Ascenseur","Parking","Vérifié par","Vérifié le"];
   const e=v=>{v=v==null?"":String(v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-  const lines=[head.join(";")].concat(r.map(c=>[c.date,c.tx,c.type,c.price,c.surface,ppmOf(c)?Math.round(ppmOf(c)):"",c.sMain,c.sMezz,c.sCave,c.sTerr,c.sLand,c.avance,c.loyer,c.city,c.district,c.address,c.gps,c.floor,c.rooms,c.state,c.standing,c.nature,c.status,c.source,c.contactName,c.contactTel,c.code,c.dossier,c.link,c.notes,(c.photos||[]).length,c.tf,c.vendeur,c.acheteur].map(e).join(";")));
+  const lines=[head.join(";")].concat(r.map(c=>[c.date,c.tx,c.type,c.price,c.surface,ppmOf(c)?Math.round(ppmOf(c)):"",c.sMain,c.sMezz,c.sCave,c.sTerr,c.sLand,c.avance,c.loyer,c.city,c.district,c.address,c.gps,c.floor,c.rooms,c.state,c.standing,c.nature,c.status,c.source,c.contactName,c.contactTel,c.code,c.dossier,c.link,c.notes,(c.photos||[]).length,c.tf,c.vendeur,c.acheteur,c.commune,c.province,c.region,c.cp,c.bati,c.niveaux,c.facades,c.vue,c.orient,c.envCom,c.envUrb,c.ascenseur,c.parking,c.verifiedBy,c.verifiedAt].map(e).join(";")));
   await saveFile("comparables_"+new Date().toISOString().slice(0,10)+".csv","﻿"+lines.join("\r\n"))};
 
 /* ===================== import My Maps (KML) ===================== */
@@ -955,7 +970,7 @@ function initMap(){
     a.onclick=ev=>{ev.preventDefault();locateMe()};
     const b=L.DomUtil.create("a","",d);b.href="#";b.title="Tout voir";b.setAttribute("role","button");b.textContent="⤢";b.onclick=ev=>{ev.preventDefault();mv=null;drawMap(lastMapR)};
     L.DomEvent.disableClickPropagation(d);return d}});
-  new Ctl({position:"topleft"}).addTo(map);
+  new Ctl({position:"topleft"}).addTo(map);addZoneCtl();
   /* appui long (doigt ou souris) : menu du point ; un simple toucher ne fait rien */
   {const el=map.getContainer();let t=null,st=null,supp=0,last=0;const cancel=()=>{clearTimeout(t);t=null};
     const onMarker=pt=>markers.some(({m})=>map.latLngToContainerPoint(m.getLatLng()).distanceTo(pt)<14);
@@ -984,8 +999,9 @@ function drawMap(r){
     m.bindPopup(()=>popupFor(c),{maxWidth:300});markers.push({m,c})});
   updLabels();
   if(center){L.circle(center,{radius:rad,color:rent,weight:2,dashArray:"6 6",fill:false,interactive:false}).addTo(ovLayer);L.circleMarker(center,{radius:6,color:"#ffffff",weight:2,fillColor:rent,fillOpacity:1,interactive:false}).addTo(ovLayer)}
+  drawZone();
   const subj=coordsFrom(etude.gps);if(subj&&sel.size)L.marker(subj,{icon:L.divIcon({className:"mc-subj",iconSize:[16,16]}),title:"Bien évalué",keyboard:false}).addTo(ovLayer);
-  if(!mv){if(center)map.fitBounds(L.latLng(center).toBounds(rad*2.3));else if(pts.length)map.fitBounds(L.latLngBounds(pts.map(p=>p.g)),{padding:[30,30],maxZoom:17});mv=true}
+  if(!mv){if(zone&&!zMode)map.fitBounds(zoneBounds(),{padding:[24,24]});else if(center)map.fitBounds(L.latLng(center).toBounds(rad*2.3));else if(pts.length)map.fitBounds(L.latLngBounds(pts.map(p=>p.g)),{padding:[30,30],maxZoom:17});mv=true}
   const lg=$("#mlegend");lg.innerHTML="";
   lg.append(h("span",{class:"meta",text:pts.length+" sur la carte"+(r.length>pts.length?" ("+(r.length-pts.length)+" sans GPS)":"")+" · appui long sur la carte : nouveau témoin, fiche de visite ou comparables autour"}));
   [...new Set(pts.map(p=>p.c.type))].forEach(t=>lg.append(h("span",null,h("i",{style:"background:"+(TCOL[t]||"#888")}),t)));
@@ -1447,7 +1463,8 @@ async function nomAddr(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(N
   const a=n?.address||{};const ville=latinName(a.city||a.town||a.village||"");
   const quartier=latinName([a.quarter,a.neighbourhood,a.suburb,a.city_district].find(x=>x&&!ADMIN_RE.test(x))||"");
   const commune=latinName([a.suburb,a.city_district,a.municipality,a.county].find(x=>x&&/^(arrondissement|commune)\b/i.test(x))||a.municipality||ville);
-  return NOM_CACHE[key]={rue:latinName(a.road||a.pedestrian||""),num:a.house_number||"",quartier,ville,commune,codePostal:a.postcode||""}}
+  const adm=v=>latinName(v||"").replace(/^(r[ée]gion|province|pr[ée]fecture(\s+d['’]arrondissements)?|pachalik|cercle)\s+(de\s+la\s+|de\s+l['’]|de\s+|d['’]\s*|du\s+|des\s+)?/i,"").trim();
+  return NOM_CACHE[key]={rue:latinName(a.road||a.pedestrian||""),num:a.house_number||"",quartier,ville,commune,codePostal:a.postcode||"",region:adm(a.state),province:adm(a.state_district||a.county)}}
 async function reverseAddr(lat,lng){const [nom,st]=await Promise.all([nomAddr(lat,lng).catch(()=>null),nearStreets(lat,lng).catch(()=>null)]);
   if(!nom&&!st)throw {code:"geo"};const sl=streetLine(st);return {...(nom||{}),rue:sl?.rue||nom?.rue||"",angle:!!sl?.angle}}
 
@@ -1473,7 +1490,7 @@ async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!naviga
   const live=()=>seq===temSeq&&$("#dlg").open&&String(coordsFrom($("#f_gps").value))===String(g);let n=0,rue="";
   const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.dispatchEvent(new Event("input"));n++}};
   const city=v=>{if(v&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),v);$("#f_city").value=v;$("#f_city").dispatchEvent(new Event("change"));n++}};
-  try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
+  try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);put("#f_commune",r.commune);put("#f_province",r.province);put("#f_region",r.region);put("#f_cp",r.codePostal);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
   if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
   try{const sl=streetLine(await nearStreets(g[0],g[1]));if(!live()||!sl?.rue)return;const a=$("#f_address");
     if(!a.value.trim()||(rue&&a.value===rue&&sl.angle)){a.value=sl.rue;a.dispatchEvent(new Event("input"));toast("Adresse : "+sl.rue)}}catch(e){}}
@@ -1855,7 +1872,7 @@ function fillAuthorSel(sel,list){const e=$(sel);if(!e)return;const m=new Map();l
 $("#f_gps").addEventListener("change",()=>{if(coordsFrom($("#f_gps").value))temGeocode()});
 
 /* ===================== transactions (Conservation foncière) ===================== */
-let natView=(()=>{const v=LS.get("vt_nat","");return v==="tr"||v==="off"?v:""})();
+var natView=(()=>{const v=LS.get("vt_nat","");return v==="tr"||v==="off"?v:""})();
 function updTrans(){const tr=$("#f_nature").value==="Transaction";$("#trFs").hidden=!tr;$("#dateLbl").textContent=tr?"Date de la vente":"Date du relevé";
   if(tx==="Vente")$("#priceLbl").textContent=tr?"Prix de vente":"Prix demandé"}
 function natUi(){$$("#natSeg button").forEach(b=>b.classList.toggle("on",b.dataset.v===natView));
@@ -1865,3 +1882,67 @@ function natCounts(){const n=items.filter(c=>c.nature==="Transaction").length;co
 $("#natSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setNat(b.dataset.v)});
 $("#f_nature").addEventListener("change",updTrans);
 natUi();
+
+/* ===================== zone dessinée sur la carte (cercle, rectangle, contour libre) ===================== */
+var zone=(()=>{const z=LS.get("vt_zone",null);return z&&((z.t==="c"&&Array.isArray(z.c)&&z.r>0)||(z.t==="p"&&Array.isArray(z.pts)&&z.pts.length>2))?z:null})(),zMode=null,zPts=[],zRt=null;
+function inZone(g){if(!zone)return true;if(!g)return false;if(zone.t==="c")return distM(g,zone.c)<=zone.r;
+  const p=zone.pts;let ins=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const [yi,xi]=p[i],[yj,xj]=p[j];if(((yi>g[0])!==(yj>g[0]))&&(g[1]<(xj-xi)*(g[0]-yi)/(yj-yi)+xi))ins=!ins}return ins}
+function zoneBounds(){return zone.t==="c"?L.latLng(zone.c).toBounds(zone.r*2.2):L.latLngBounds(zone.pts)}
+function drawZone(){if(!map)return;const col=getComputedStyle(document.documentElement).getPropertyValue("--brand").trim()||"#1d6fe0";
+  const o={color:col,weight:2.5,dashArray:"8 6",fillColor:col,fillOpacity:.08,interactive:false};
+  if(zone&&!zMode)(zone.t==="c"?L.circle(zone.c,{...o,radius:zone.r}):L.polygon(zone.pts,o)).addTo(ovLayer);
+  if(zMode&&zPts.length){if(zPts.length>1)L.polyline(zPts,{color:col,weight:2.5,dashArray:"4 5",interactive:false}).addTo(ovLayer);
+    zPts.forEach((p,i)=>L.circleMarker(p,{radius:i?5:7,color:"#ffffff",weight:2,fillColor:col,fillOpacity:1,interactive:false}).addTo(ovLayer))}}
+function zoneCursor(){if(map)map.getContainer().classList.toggle("zdraw",!!zMode)}
+function setZone(z){zone=z;LS.set("vt_zone",z);zMode=null;zPts=[];zoneCursor();shown=0;mv=null;render();
+  if(z)toast("Zone appliquée à la liste et aux indicateurs")}
+function startZone(m){if(view!=="map"){view="map";LS.set("mc_view",view);mv=true;render()}zMode=m;zPts=[];zoneCursor();zoneUi();if(lastMapR)drawMap(lastMapR);
+  toast(m==="c"?"Touche le centre de la zone, puis règle le rayon.":m==="r"?"Touche deux coins opposés du rectangle.":"Touche les points du contour, puis « Terminer la zone » (ou touche le premier point).")}
+function onZoneClick(e){if(!zMode)return;const p=[+e.latlng.lat.toFixed(6),+e.latlng.lng.toFixed(6)];
+  if(zMode==="c"){setZone({t:"c",c:p,r:+$("#zoneR").value||500});return}
+  if(zMode==="p"&&zPts.length>=3&&map.latLngToContainerPoint(zPts[0]).distanceTo(e.containerPoint)<18){setZone({t:"p",pts:zPts.slice()});return}
+  zPts.push(p);
+  if(zMode==="r"&&zPts.length===2){const [a,b]=zPts;setZone({t:"p",pts:[a,[a[0],b[1]],b,[b[0],a[1]]]});return}
+  drawMap(lastMapR);zoneUi()}
+function zoneUi(n){const b=$("#zoneBar");if(!b)return;const on=!!zone||!!zMode;b.hidden=!on;if(!on)return;
+  $("#zoneRW").hidden=!(zMode==="c"||(!zMode&&zone&&zone.t==="c"));$("#zoneDone").hidden=!(zMode==="p"&&zPts.length>=3);$("#zoneMap").hidden=view==="map";
+  if(zone&&zone.t==="c"&&!zMode){$("#zoneR").value=zone.r;$("#zoneRV").textContent=zone.r>=1000?(zone.r/1000).toString().replace(".",",")+" km":zone.r+" m"}
+  $("#zoneTxt").textContent=zMode?(zMode==="c"?"Cercle : touche le centre sur la carte":zMode==="r"?"Rectangle : "+zPts.length+" coin sur 2":"Contour : "+zPts.length+" point"+(zPts.length>1?"s":"")+(zPts.length<3?" (3 au moins)":""))
+    :"Zone dessinée"+(n!=null?" : "+n+" témoin"+(n>1?"s":""):"")}
+function addZoneCtl(){const Z=L.Control.extend({onAdd(){const d=L.DomUtil.create("div","leaflet-bar mc-ctl zctl");
+  [["c","Zone en cercle",'<circle cx="9" cy="9" r="6.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="3 2"/><circle cx="9" cy="9" r="1.7" fill="currentColor"/>'],
+   ["r","Zone en rectangle",'<rect x="2.5" y="4" width="13" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="3 2"/>'],
+   ["p","Zone au contour libre",'<path d="M3 13.5 5 4l7 1.2 3.5 5.6-5.8 4.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-dasharray="3 2"/>']].forEach(([m,t,s])=>{
+    const a=L.DomUtil.create("a","",d);a.href="#";a.title=t;a.setAttribute("role","button");a.setAttribute("aria-label",t);a.innerHTML='<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">'+s+'</svg>';
+    a.onclick=ev=>{ev.preventDefault();startZone(m)}});
+  L.DomEvent.disableClickPropagation(d);return d}});new Z({position:"topleft"}).addTo(map);map.on("click",onZoneClick)}
+$("#zoneR").addEventListener("input",e=>{const r=+e.target.value;$("#zoneRV").textContent=r>=1000?(r/1000).toString().replace(".",",")+" km":r+" m";
+  if(zone&&zone.t==="c"&&!zMode){zone={...zone,r};LS.set("vt_zone",zone);clearTimeout(zRt);zRt=setTimeout(()=>{shown=0;render()},180)}});
+$("#zoneDone").onclick=()=>{if(zPts.length>=3)setZone({t:"p",pts:zPts.slice()})};
+$("#zoneClear").onclick=()=>{zMode=null;zPts=[];setZone(null)};
+$("#zoneMap").onclick=()=>{view="map";LS.set("mc_view",view);mv=null;shown=0;render();window.scrollTo({top:0})};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&zMode){zMode=null;zPts=[];zoneCursor();zoneUi();if(lastMapR)drawMap(lastMapR)}});
+
+/* ===================== copie au format SAX (ordre des rubriques du formulaire) ===================== */
+const SAX_TYPE={"Appartement":"Appartement","Villa":"Villa Sans Copropriété","Maison":"Logement unifamilial","Local commercial":"Local Commercial","Bureau":"Bureau","Plateau de bureaux":"Bureau","Terrain":"Terrain Urbain","Entrepôt / dépôt":"Entrepôt / Dépôt","Immeuble":"Immeuble de plusieurs éléments sans eclatement","Usine":"Industrie ou atelier"};
+const SAX_BATI={"Mitoyen":"Bâtiment entre mitoyen","Isolé":"Bâtiment isolé","Groupement d’immeubles":"Bâtiment faisant Partie d′un groupement d′immeubles","Résidence fermée":"Résidence sécurisée avec espaces en commun","Villa / maison individuelle":"Bâtiment isolé"};
+const SAX_STAND={"Économique":"Bas","Moyen standing":"Moyen","Haut standing":"Haut","Luxe":"Très Haut"};
+const SAX_ETAT={"Neuf":"Très Bon","Bon état":"Bon","Moyen":"Régulier","À rénover":"Mauvais","En construction":"En construction","Gros œuvre":"En construction"};
+function saxText(c){const g=gpsOf(c),u=ppmOf(c),L2=[],add=(k,v)=>{if(v!=null&&v!=="")L2.push(k+" : "+v)},sec=t=>L2.push("","— "+t+" —");
+  const real=(c.sMain||0)+(c.sMezz||0)+(c.sCave||0)+(c.sTerr||0);
+  L2.push("Témoin "+(c.ref||"")+" (Valtera)");
+  sec("Adresse");add("Pays","Maroc");add("Région",c.region);add("Province",c.province);add("Commune",c.commune);add("Quartier",c.district);add("Rue",c.address);add("Niveau",c.floor);add("Code postal",c.cp);
+  if(g){add("Latitude",g[0]);add("Longitude",g[1])}
+  sec("Type de témoin");add("Type d’opération",c.tx==="Location"?"Location":"Vente");add("Typologie de bien",SAX_TYPE[c.type]||c.type);
+  add("Typologie",LAND_TYPES.includes(c.type)?"Terrain":SAX_BATI[c.bati]||"");add("Orientation",c.orient);add("Vues",c.vue);
+  add("Environnement commercial",c.envCom);add("Environnement urbain",c.envUrb);add("Niveau de standing",SAX_STAND[c.standing]||c.standing);
+  if(c.sLand){sec("Terrain");add("Parcelle",fmtS(c.sLand)+" m²")}
+  sec("Construction");
+  if(c.surface&&basisOf(c)!=="terrain")add("Surface vendable",fmtS(c.surface)+" m²"+(real&&real!==c.surface?" (pondérée ; réelle "+fmtS(real)+" m² : "+[c.sMain?"principale "+fmtS(c.sMain):"",c.sMezz?"mezzanine "+fmtS(c.sMezz):"",c.sCave?"sous-sol "+fmtS(c.sCave):"",c.sTerr?"terrasse "+fmtS(c.sTerr):""].filter(Boolean).join(" + ")+")":""));
+  add("Nombre de niveau",c.niveaux);add("Étages sous-sol",c.sCave?"1":"");add("Pièces",c.rooms);add("Age",c.age?c.age+" ans":"");add("État de conservation",SAX_ETAT[c.state]||c.state);
+  sec("Prix HT");add("Valeur offerte",c.price!=null?fmt(c.price)+" Dhs"+(c.tx==="Location"?" / mois":""):"");add("Valeur unitaire",u?fmt(Math.round(u))+" Dhs/m²":"");
+  sec("Source du témoin");add("Source du témoin",c.nature==="Transaction"?"Transaction":c.nature==="Expertise"?"Expertise":/site|avito|mubawab|yakeey|agenz/i.test(c.source||"")?"Site Web":c.nature==="Offre"||!c.nature?"Offre":"Autre");
+  add("Vérifié par",c.verifiedBy);add("Vérifié le",c.verifiedAt?new Date(c.verifiedAt).toLocaleDateString("fr-FR"):"");
+  add("URL de référence",c.link);add("Téléphone",c.contactTel);add("Contact",c.contactName);
+  if(c.notes){sec("Observations");L2.push(c.notes)}
+  return L2.join("\n")}

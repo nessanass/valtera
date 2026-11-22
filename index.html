@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261120183706"></script>
+<script src="boot.js?v=20261122142738"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261120183706">
+<link rel="stylesheet" href="style.css?v=20261122142738">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -105,6 +105,12 @@
       <label>Surface (m²)<span class="range"><input id="fSmin" inputmode="numeric" placeholder="min"><input id="fSmax" inputmode="numeric" placeholder="max"></span></label>
       <label>Prix au m² (DH)<span class="range"><input id="fUmin" inputmode="numeric" placeholder="min"><input id="fUmax" inputmode="numeric" placeholder="max"></span></label>
       <label>Relevé depuis<input id="fSince" type="date"></label>
+      <label>Terrain (m²)<span class="range"><input id="fLmin" inputmode="numeric" placeholder="min"><input id="fLmax" inputmode="numeric" placeholder="max"></span></label>
+      <label>Âge (ans)<span class="range"><input id="fAmin" inputmode="numeric" placeholder="min"><input id="fAmax" inputmode="numeric" placeholder="max"></span></label>
+      <label>Relevé jusqu’au<input id="fUntil" type="date"></label>
+      <label>Standing<select id="fStanding"></select></label>
+      <label>État<select id="fState"></select></label>
+      <label>Façades<select id="fFacades"><option value="">Toutes</option><option>1 façade</option><option>2 façades</option><option>Angle</option><option>3 façades ou plus</option></select></label>
       <label id="fByL" hidden>Ajouté par<select id="fBy"><option value="">Tout le monde</option></select></label>
       <label>Tri<select id="sort">
         <option value="date-desc">Plus récents</option><option value="date-asc">Plus anciens</option>
@@ -124,6 +130,7 @@
 
     <section class="kpis" id="kpis" aria-label="Indicateurs"></section>
     <p class="info" id="info" hidden></p>
+    <div class="zonebar" id="zoneBar" hidden><span class="zt" id="zoneTxt"></span><span class="zr" id="zoneRW" hidden><input type="range" id="zoneR" min="100" max="5000" step="50" value="500" aria-label="Rayon de la zone"><b class="num" id="zoneRV">500 m</b></span><button class="btn sm pri" type="button" id="zoneDone" hidden>Terminer la zone</button><button class="btn sm" type="button" id="zoneMap">Voir sur la carte</button><button class="btn sm" type="button" id="zoneClear">Effacer la zone</button></div>
 
     <section class="list" id="list"></section>
     <div class="tblwrap" id="tblWrap" hidden><table class="t" id="tbl"></table></div>
@@ -261,6 +268,10 @@
       <div class="fgrid">
         <label>Ville<input id="f_city" list="cities" placeholder="ex. Casablanca"></label>
         <label>Quartier<input id="f_district" list="districts" placeholder="ex. Mers Sultan"></label>
+        <label>Commune<input id="f_commune" placeholder="rempli depuis le GPS"></label>
+        <label>Province / préfecture<input id="f_province" placeholder="rempli depuis le GPS"></label>
+        <label>Région<input id="f_region" placeholder="rempli depuis le GPS"></label>
+        <label>Code postal<input id="f_cp" inputmode="numeric"></label>
         <label class="s2">Adresse<input id="f_address" placeholder="Rue, n°, résidence…"></label>
         <label class="s2">Position GPS<input id="f_gps" inputmode="decimal" placeholder="ex. 33.5731, -7.5898"></label>
         <label>Étage<input id="f_floor" placeholder="ex. RDC, 3e étage"></label>
@@ -276,6 +287,21 @@
         <label>État<select id="f_state"></select></label>
         <label>Standing<select id="f_standing"></select></label>
         <label>Âge <span class="u">(ans)</span><input id="f_age" inputmode="numeric"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Caractéristiques</legend>
+      <div class="fgrid">
+        <label>Immeuble<select id="f_bati"><option value=""></option><option>Mitoyen</option><option>Isolé</option><option>Groupement d’immeubles</option><option>Résidence fermée</option><option>Villa / maison individuelle</option></select></label>
+        <label>Nombre de niveaux<input id="f_niveaux" placeholder="ex. R+4"></label>
+        <label>Façades<select id="f_facades"><option value=""></option><option>1 façade</option><option>2 façades</option><option>Angle</option><option>3 façades ou plus</option></select></label>
+        <label>Donne sur<select id="f_vue"><option value=""></option><option>Rue</option><option>Rue étroite</option><option>Avenue</option><option>Boulevard</option><option>Place</option><option>Mer</option><option>Parc / zone verte</option><option>Cour intérieure</option><option>Vue dégagée</option></select></label>
+        <label>Orientation<select id="f_orient"><option value=""></option><option>Nord</option><option>Nord-est</option><option>Est</option><option>Sud-est</option><option>Sud</option><option>Sud-ouest</option><option>Ouest</option><option>Nord-ouest</option></select></label>
+        <label>Environnement commercial<select id="f_envCom"><option value=""></option><option>Très bon</option><option>Bon</option><option>Moyen</option><option>Faible</option><option>Inexistant</option></select></label>
+        <label>Environnement urbain<select id="f_envUrb"><option value=""></option><option>Très bon</option><option>Bon</option><option>Moyen</option><option>Dégradé</option></select></label>
+        <label>Ascenseur<select id="f_ascenseur"><option value=""></option><option>Oui</option><option>Non</option></select></label>
+        <label>Parking<select id="f_parking"><option value=""></option><option>Oui</option><option>Non</option><option>Sous-sol</option><option>Box</option></select></label>
       </div>
     </fieldset>
 
@@ -312,7 +338,7 @@
 </dialog>
 
 <dialog id="view" class="wide">
-  <div class="dh"><h2 id="vTitle"></h2><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" id="vSel">Ajouter à l’étude</button><button class="btn" type="button" id="vCopy">Copier le résumé</button><button class="btn" type="button" id="vNear">Comparables proches</button><button class="btn pri" type="button" id="vEdit">Modifier</button><button class="btn" type="button" data-close>Fermer</button></div></div>
+  <div class="dh"><h2 id="vTitle"></h2><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" id="vSel">Ajouter à l’étude</button><button class="btn" type="button" id="vCopy">Copier le résumé</button><button class="btn" type="button" id="vNear">Comparables proches</button><button class="btn" type="button" id="vVerify" hidden>Marquer vérifié</button><button class="btn" type="button" id="vSax">Copier pour SAX</button><button class="btn pri" type="button" id="vEdit">Modifier</button><button class="btn" type="button" data-close>Fermer</button></div></div>
   <div class="db" id="vBody"></div>
 </dialog>
 
@@ -443,7 +469,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261120183706"></script>
-<script src="app.js?v=20261120183706"></script>
+<script src="config.js?v=20261122142738"></script>
+<script src="app.js?v=20261122142738"></script>
 </body>
 </html>

@@ -660,3 +660,11 @@ legend,.vh{font:700 11.5px var(--f-body);letter-spacing:.08em}
 .natseg .nb2{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:9px;background:var(--brand);color:#fff;font:700 11px/18px var(--f-body);text-align:center}
 .natseg button.on .nb2{background:var(--navy);color:#fff}
 @media (max-width:759px){.tools .natseg{flex:1 1 100%;display:flex}.tools .natseg button{flex:1 1 0}}
+
+.zonebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:var(--brand-soft);color:var(--ink);position:relative;z-index:1}
+.zonebar .zt{font-weight:600;flex:1 1 auto;min-width:0}
+.zonebar .zr{display:inline-flex;align-items:center;gap:8px;flex:1 1 200px}
+.zonebar .zr input{flex:1 1 auto;accent-color:var(--brand);padding:0;background:none;border:none}
+.zonebar .zr b{min-width:62px;text-align:right}
+.leaflet-container.zdraw,.leaflet-container.zdraw .leaflet-interactive{cursor:crosshair}
+.zctl a{display:flex!important;align-items:center;justify-content:center}
