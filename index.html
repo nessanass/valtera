@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261122152858"></script>
+<script src="boot.js?v=20261123030830"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261122152858">
+<link rel="stylesheet" href="style.css?v=20261123030830">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -449,6 +449,35 @@
   <div class="pickwrap"><div id="pickMap" role="application" aria-label="Carte satellite pour choisir un point"></div><div class="pickcross" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 44 44"><g fill="none" stroke-linecap="round"><g stroke="#000" stroke-opacity=".55" stroke-width="4.5"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g><g stroke="#fff" stroke-width="2"><circle cx="22" cy="22" r="9"/><path d="M22 2v11M22 31v11M2 22h11M31 22h11"/></g></g><circle cx="22" cy="22" r="2.2" fill="#e9a948" stroke="#000" stroke-width=".8"/></svg></div></div>
   <div class="df pickbar"><button class="btn" id="pickMe" type="button">Ma position</button><input id="pickGo" placeholder="Coller des coordonnées…" inputmode="decimal" autocomplete="off" aria-label="Aller à des coordonnées"><span class="num" id="pickTxt"></span><button class="btn pri" id="pickOk" type="button">Valider ce point</button></div>
 </dialog>
+
+<dialog id="ckDlg" aria-label="Croquis">
+  <div class="ckbar">
+    <button type="button" class="ckib" id="ckBack" title="Retour à la fiche" aria-label="Retour à la fiche"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6"/></svg></button>
+    <input id="ckName" class="ckname" placeholder="Nom : RDC, Étage 1…" aria-label="Nom du croquis" autocomplete="off">
+    <div class="ckbtns">
+      <button type="button" class="ckib" id="ckUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 5 4 8.5 7.5 12"/><path d="M4.5 8.5H12a4 4 0 0 1 0 8H9"/></svg></button>
+      <button type="button" class="ckib" id="ckRedo" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 5 16 8.5 12.5 12"/><path d="M15.5 8.5H8a4 4 0 0 0 0 8h3"/></svg></button>
+      <button type="button" class="ckib" id="ckPng" title="Télécharger l’image (PNG)" aria-label="Télécharger l’image"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.5v9M6.5 9 10 12.5 13.5 9"/><path d="M4 14.5v2h12v-2"/></svg></button>
+      <button type="button" class="ckib" id="ckClear" title="Tout effacer" aria-label="Tout effacer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6h11M8 6V4h4v2M6 6l.7 10h6.6L14 6"/></svg></button>
+      <button type="button" class="btn pri sm" id="ckSave">Enregistrer</button>
+    </div>
+  </div>
+  <div class="ckopts">
+    <button type="button" class="ckt on" id="ckOrtho" title="Angles bloqués à 90°, 45° ou libres">Ortho 90°</button>
+    <button type="button" class="ckt on" id="ckSnapB" title="Aimant : extrémités des murs et pas de 5 cm">Aimant</button>
+    <button type="button" class="ckt on" id="ckGridB" title="Grille (0,5 m, 1 m, 5 m)">Grille</button>
+    <button type="button" class="ckt on" id="ckDimsB" title="Longueurs des murs et surfaces des pièces">Cotes</button>
+    <span class="ckinfo" id="ckInfo"></span>
+  </div>
+  <div class="ckmain">
+    <div class="cktools" id="ckTools" role="toolbar" aria-label="Outils de dessin"></div>
+    <div class="ckstage" id="ckStage"><svg id="ckSvg"></svg>
+      <div class="ckzoom"><button type="button" id="ckZout" aria-label="Dézoomer">−</button><span id="ckZoom">100 %</span><button type="button" id="ckZin" aria-label="Zoomer">+</button><button type="button" id="ckFit" title="Tout voir" aria-label="Tout voir"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V4h4M12 4h4v4M16 12v4h-4M8 16H4v-4"/></svg></button></div>
+    </div>
+  </div>
+  <div class="ckpanel" id="ckPanel"></div>
+  <datalist id="ckRoomList"><option value="Salon"><option value="Séjour"><option value="Chambre"><option value="Chambre parentale"><option value="Cuisine"><option value="SDB"><option value="WC"><option value="Hall"><option value="Couloir"><option value="Dégagement"><option value="Terrasse"><option value="Balcon"><option value="Cour"><option value="Jardin"><option value="Garage"><option value="Magasin"><option value="Mezzanine"><option value="Bureau"><option value="Réserve"><option value="Buanderie"><option value="Escalier"><option value="Local commercial"></datalist>
+</dialog>
 <dialog id="sigDlg">
   <div class="dh"><div><h2>Ma signature</h2><div class="meta">Elle s’ajoute toute seule dans la case « Signature visiteur » de tes fiches PDF.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
   <div class="db">
@@ -469,7 +498,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261122152858"></script>
-<script src="app.js?v=20261122152858"></script>
+<script src="config.js?v=20261123030830"></script>
+<script src="app.js?v=20261123030830"></script>
 </body>
 </html>
