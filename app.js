@@ -1874,7 +1874,7 @@ async function resolveAccess(u){
   LS.set("vt_me",{uid:u.uid,email:ME.email,role:d.role,modules:ME.modules,expires:exp,active:d.active!==false,visScope:ME.visScope,temScope:ME.temScope});
   if(d.role==="owner")fdb.doc("config/owner").set({uid:u.uid,name:ME.name}).catch(()=>{});
   uref.update({lastSeen:Date.now(),name:ME.name}).catch(()=>{});
-  online=true;hideGate();applyRoleUi();listen();updateAcct();if(isOwner())listenAdmin();
+  online=true;hideGate();applyRoleUi();agRole();listen();updateAcct();if(isOwner())listenAdmin();
   if(exp&&exp-Date.now()<7*864e5)toast("Ton accès prend fin le "+dateFr(exp)+".");
 }
 async function boot(){
@@ -2315,3 +2315,128 @@ async function addPlansToPdf(doc,v){const ps=(v.plans||[]).filter(p=>(p.items||[
     else if(e.key==="Delete"&&CK.sel&&!/input|select|textarea/i.test(e.target.tagName)){$("#ckDel")?.click()}
     else if(/^[0-9.,]$/.test(e.key)&&!e.ctrlKey&&!e.metaKey&&!/input|select|textarea/i.test(e.target.tagName)){const l=$("#ckLen")||$("#ckSegL")||$("#ckRw");if(l){l.focus()}}});
 })();
+
+/* ===================== agenda Google → fiche de visite (propriétaire seulement) ===================== */
+/* Lecture seule de l'agenda (calendar.readonly). Le jeton est demandé avec une 2e instance Firebase
+   (« vtcal ») : la session Valtera ne change pas, même si on choisit un autre compte Google (ex. compte Tinsa). */
+var AG={tok:null,exp:0,email:"",cal:"",cals:[],date:"",events:[],busy:false};
+const AG_SCOPE="https://www.googleapis.com/auth/calendar.readonly";
+const AG_API="https://www.googleapis.com/calendar/v3";
+const AG_ENABLE="https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project="+((window.VT_CONFIG&&VT_CONFIG.firebase&&VT_CONFIG.firebase.messagingSenderId)||"");
+function agLoad(){try{const s=JSON.parse(sessionStorage.getItem("vt_ag_tok")||"null");if(s&&s.exp>Date.now()+60000){AG.tok=s.tok;AG.exp=s.exp;AG.email=s.email||""}}catch(e){}
+  try{AG.cal=LS.get("vt_ag_cal","")||"";if(!AG.email)AG.email=LS.get("vt_ag_hint","")||""}catch(e){}}
+function agSaveTok(){try{sessionStorage.setItem("vt_ag_tok",JSON.stringify({tok:AG.tok,exp:AG.exp,email:AG.email}))}catch(e){}}
+function agDateISO(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function agHM(d){return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+/* ---------- lecture d'un rendez-vous ---------- */
+function agLines(html){return String(html||"").replace(/<br\s*\/?>/gi,"\n").replace(/<\/(li|p|div|h\d)>/gi,"\n").replace(/<li[^>]*>/gi,"").replace(/<[^>]+>/g,"")
+  .replace(/&nbsp;/g," ").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,"&")
+  .split(/\n/).map(s=>s.replace(/[ \t ]+/g," ").trim()).filter(Boolean)}
+const AG_PH=/(?:\+\s?212[\s.\-]*|\b0)[5-7](?:[\s.\-]*\d){8}\b/g;
+function agTel(s){let d=String(s).replace(/\D/g,"");if(d.startsWith("212"))d="0"+d.slice(3);return d.length===10?d.replace(/(\d{2})(?=\d)/g,"$1 ").trim():s.trim()}
+function agGps(t){const L=t.match(/lat[a-z.]*\s*:?\s*(-?\d{1,2}[.,]\d+)[\s\S]{0,40}?lon[a-z.]*\s*:?\s*(-?\d{1,3}[.,]\d+)/i);
+  if(L){const a=+L[1].replace(",","."),b=+L[2].replace(",",".");if(a>20&&a<37&&b<0&&b>-18)return [a,b]}return coordsFrom(t)}
+const AG_CLIENT=/\b(bank|banque|banco|immo|leasing|cih|attijari|atw|bmci|bmce|barid|sabadel|cdg|saham|wafa|cr[ée]dit|soci[ée]t[ée]|sarl|holding|groupe|assurance|bank of africa|boa|cfg|umnia|al akhdar|tamwil)\b/i;
+const AG_NOTE=/visite|merci|contact|confirm|lat\b|lat\.|long|g[ée]oloc|ext[ée]rieur|int[ée]rieur|[ée]tude|voir avec|rdv|rendez|cl[ée]s?\b|appeler|urgent/i;
+const AG_TYPES=[[/terrain/i,null,"terrain"],[/\b(e\.?a\.?|[ée]tat d.?avancement|avancement)\b/i,null,"avancement"],
+  [/usine|entrep[ôo]t|hangar|plate-?forme logistique|logistique|unit[ée] industrielle|industriel|d[ée]p[ôo]t/i,"Usine"],[/appartement|appart\b|duplex|studio|triplex/i,"Appartement"],
+  [/\bvilla/i,"Villa"],[/maison|riad|habitation/i,"Maison"],[/\blocal|magasin|commerc|showroom|boutique|caf[ée]|restaurant|pharmacie|agence/i,"Local commercial"],
+  [/immeuble|bureau|plateau|parking|clinique|h[ôo]tel|[ée]cole|lyc[ée]e|coll[èe]ge|h[ôo]pital|dispensaire|centre de sant[ée]|d[ée]l[ée]gation|direction/i,"Autre"]];
+function agNorm(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function agIsCity(s){const n=agNorm(s);if(!n||typeof CITIES==="undefined")return "";const c=CITIES.find(([name])=>agNorm(name)===n);return c?c[0]:""}
+function agParse(title,desc,start,end){
+  title=String(title||"").replace(/\s+/g," ").trim();const lines=agLines(desc),all=title+"\n"+lines.join("\n");
+  const out={title,dossier:"",visite:"",typeTxt:"",typo:"",kind:"bien",lieu:"",client:"",contact:"",tel:"",gps:null,date:"",heure:"",notes:[]};
+  const dm=all.match(/\b(\d{3,5})\s*\/\s*(20\d{2})\b/);if(dm)out.dossier=dm[1]+"/"+dm[2];
+  const vm=title.match(/(?:visite|vis\.?)\s*(?:n[°o]\s*|#\s*)?(\d+)/i);if(vm)out.visite=vm[1];
+  /* titre : « 1234/2026 /// VISITE 1 // Appartement // Maarif », « 1234/2026 | Visite #1 | Local | AIN SEBAA », « 1234/2026 - CLIENT » */
+  const segs=title.split(/\s*(?:\/{2,}|\||\s[-–—]\s)\s*/).map(s=>s.replace(/^[\s.\-–—]+|[\s.\-–—]+$/g,"").trim()).filter(Boolean)
+    .filter(s=>!/^\d{3,5}\s*\/\s*20\d{2}$/.test(s)&&!/^(?:visite|vis\.?|[ée]tude)\s*(?:n[°o]\s*|#\s*)?\d*$/i.test(s));
+  const rest=[];segs.forEach(s=>{const t=AG_TYPES.find(([re])=>re.test(s));if(t&&!out.typeTxt){out.typeTxt=s;if(t[2])out.kind=t[2];if(t[1])out.typo=t[1]}else rest.push(s)});
+  if(/terrain/i.test(out.typeTxt))out.kind="terrain";
+  if(out.typeTxt&&!out.typo){const t=AG_TYPES.slice(2).find(([re])=>re.test(out.typeTxt));if(t)out.typo=t[1]}
+  rest.forEach(s=>{if(/^\d+\s*\.\s*[A-Z]{2,}\b/.test(s))out.notes.push("Réf. agenda : "+s);else if(!out.client&&AG_CLIENT.test(s))out.client=s;else if(!out.lieu)out.lieu=s;else out.notes.push(s)});
+  out.gps=agGps(all);
+  /* description ligne par ligne */
+  lines.forEach(l=>{const ph=l.match(AG_PH);
+    if(ph){if(!out.tel)out.tel=agTel(ph[0]);
+      if(!out.contact){const civ=l.match(/\b(?:M\.|Mr\.?|Mme|Mlle|Monsieur|Madame)\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]+)?/);
+        let nm=civ?civ[0]:l.replace(AG_PH,"").replace(/\b(contact|t[ée]l(?:[ée]phone)?|gsm|mobile|portable|num[ée]ro)\b\.?\s*:?/gi,"").replace(/[():,;–—\-]+/g," ").replace(/\s+/g," ").trim();
+        if(!civ&&(nm.split(" ").length>3||/visite|merci|contacter|confirm|client|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche/i.test(nm)))nm="";if(nm)out.contact=nm}
+      const left=l.replace(AG_PH,"").replace(/\b(contact|t[ée]l(?:[ée]phone)?|gsm|mobile)\b\.?\s*:?/gi,"").replace(/[():\s.]+$/,"").trim();
+      if(left&&!(out.contact&&left.replace(/[^A-Za-zÀ-ÿ]/g,"")===out.contact.replace(/[^A-Za-zÀ-ÿ]/g,""))&&left.split(" ").length>3)out.notes.push(l.replace(AG_PH,m=>agTel(m)));return}
+    if(/-?\d{1,2}[.,]\d{3,}/.test(l)&&!/[a-z]{4,}/i.test(l.replace(/lat|long|g[ée]olocalisation/gi,"")))return;
+    if(/^(lat|long)[a-z.]*\s*:/i.test(l)||/^g[ée]olocalisation\s*:?\s*-?\d/i.test(l))return;
+    if(!out.client&&!/\d/.test(l)&&!AG_NOTE.test(l)&&l.length<=40&&l.split(" ").length<=5){out.client=l;return}
+    if(out.dossier&&l.replace(/\s/g,"").includes(out.dossier.replace(/\s/g,""))&&l.length<30)return;
+    out.notes.push(l)});
+  const s=start?new Date(start):null,e=end?new Date(end):null;
+  if(s&&!isNaN(s)){out.date=agDateISO(s);if(String(start).length>10)out.heure=agHM(s)+(e&&!isNaN(e)&&String(end).length>10?"–"+agHM(e):"")}
+  return out}
+function agPreset(p){const rem=[];rem.push("Agenda"+(p.heure?" (RDV "+p.heure+")":"")+" : "+p.title);if(p.client)rem.push("Client : "+p.client);if(p.visite)rem.push("Visite n° "+p.visite);
+  p.notes.forEach(n=>{if(!rem.includes(n))rem.push(n)});
+  const o={kind:p.kind,remarques:rem.join("\n")};if(p.dossier)o.dossier=p.dossier;if(p.date)o.date=p.date;if(p.contact)o.contact=p.contact;if(p.tel)o.contactTel=p.tel;
+  if(p.gps)o.gps=gpsStr(p.gps);
+  if(p.kind==="bien"&&p.typo)o.typo=p.typo;if(p.kind==="avancement"&&p.typeTxt)o.typeBien=p.typeTxt;
+  if(p.lieu){const c=agIsCity(p.lieu);if(c)o.ville=c;else if(!p.gps)o.quartier=p.lieu.replace(/\b\w/g,m=>m.toUpperCase()).replace(/\B\w+/g,m=>m.toLowerCase())}
+  return o}
+function agExisting(p){if(!p.dossier||typeof visites==="undefined")return null;return visites.find(v=>(v.dossier||"").replace(/\s/g,"")===p.dossier&&(!p.date||!v.date||v.date===p.date))||visites.find(v=>(v.dossier||"").replace(/\s/g,"")===p.dossier)||null}
+function agCreate(p,kind){const o=agPreset({...p,kind:kind||p.kind});$("#agDlg").close();openVisite(null,o);
+  setTimeout(()=>{if(o.gps)try{autoPlace()}catch(e){}const n=$("#visNote");if(n)n.textContent="Remplie depuis l’agenda : vérifie et complète la fiche, puis enregistre."},60)}
+/* ---------- Google : jeton, agendas, rendez-vous ---------- */
+function agApp(){let a=(firebase.apps||[]).find(x=>x.name==="vtcal");if(!a){a=firebase.initializeApp(VT_CONFIG.firebase,"vtcal");try{a.auth().setPersistence(firebase.auth.Auth.Persistence.NONE)}catch(e){}}return a}
+async function agConnect(){const st=$("#agSt");const app=agApp(),p=new firebase.auth.GoogleAuthProvider();p.addScope(AG_SCOPE);
+  const prm={prompt:"select_account"};if(AG.email)prm.login_hint=AG.email;p.setCustomParameters(prm);
+  st.textContent="Connexion à Google…";
+  try{const r=await app.auth().signInWithPopup(p);const tok=r.credential&&r.credential.accessToken;if(!tok)throw {code:"no-token"};
+    AG.tok=tok;AG.exp=Date.now()+55*60000;AG.email=(r.user&&r.user.email)||"";agSaveTok();try{LS.set("vt_ag_hint",AG.email)}catch(e){}
+    const same=r.user&&auth.currentUser&&r.user.uid===auth.currentUser.uid;try{if(!same&&r.user)await r.user.delete();else await app.auth().signOut()}catch(e){try{await app.auth().signOut()}catch(_){}}
+    await agLoadCals();await agFetch()}
+  catch(e){const c=e&&e.code||"";st.textContent=c==="auth/popup-closed-by-user"||c==="auth/cancelled-popup-request"?"Connexion annulée.":c==="auth/popup-blocked"?"Le navigateur a bloqué la fenêtre Google : autorise les fenêtres pop-up pour Valtera, puis réessaie.":
+    "Google n’a pas donné l’accès à l’agenda"+(c?" ("+c.replace("auth/","")+")":"")+". Si c’est le compte Tinsa, l’administrateur Google de Tinsa bloque peut-être les applications externes : utilise alors « Coller un rendez-vous » plus bas.";agRender()}}
+async function agApi(path){if(!AG.tok||AG.exp<Date.now())throw {code:"expired"};
+  const r=await fetch(AG_API+path,{headers:{Authorization:"Bearer "+AG.tok}});if(r.ok)return r.json();
+  let j=null;try{j=await r.json()}catch(e){}const msg=JSON.stringify(j||{});
+  if(r.status===401){AG.tok=null;agSaveTok();throw {code:"expired"}}
+  if(r.status===403&&/accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(msg))throw {code:"api-off"};
+  throw {code:"http-"+r.status,msg:(j&&j.error&&j.error.message)||""}}
+async function agLoadCals(){const j=await agApi("/users/me/calendarList?minAccessRole=reader&maxResults=250");
+  AG.cals=(j.items||[]).filter(c=>!/#holiday@|#contacts@|#weeknum@/.test(c.id)).map(c=>({id:c.id,name:c.summaryOverride||c.summary||c.id,primary:!!c.primary}));
+  if(!AG.cals.some(c=>c.id===AG.cal)){const pick=AG.cals.find(c=>/visiteur/i.test(c.name)&&/anass|nessah/i.test(c.name))||AG.cals.find(c=>/visiteur/i.test(c.name))||AG.cals.find(c=>c.primary)||AG.cals[0];AG.cal=pick?pick.id:"";try{LS.set("vt_ag_cal",AG.cal)}catch(e){}}}
+async function agFetch(){const st=$("#agSt");if(!AG.tok||AG.exp<Date.now()){AG.tok=null;agRender();return}
+  if(!AG.cals.length){try{await agLoadCals()}catch(e){return agErr(e)}}
+  const d0=new Date(AG.date+"T00:00:00"),d1=new Date(d0.getTime()+86400000);AG.busy=true;st.textContent="Lecture de l’agenda…";agRender();
+  try{const j=await agApi("/calendars/"+encodeURIComponent(AG.cal)+"/events?singleEvents=true&orderBy=startTime&maxResults=50&timeMin="+encodeURIComponent(d0.toISOString())+"&timeMax="+encodeURIComponent(d1.toISOString()));
+    AG.events=(j.items||[]).filter(e=>e.status!=="cancelled").map(e=>({id:e.id,p:agParse(e.summary,e.description,(e.start||{}).dateTime||(e.start||{}).date,(e.end||{}).dateTime||(e.end||{}).date),loc:e.location||""}));
+    AG.events.forEach(e=>{if(!e.p.gps&&e.loc){const g=agGps(e.loc);if(g)e.p.gps=g}});
+    st.textContent=AG.events.length?AG.events.length+" rendez-vous ce jour-là.":"Aucun rendez-vous ce jour-là dans cet agenda."}
+  catch(e){agErr(e)}AG.busy=false;agRender()}
+function agErr(e){const st=$("#agSt"),c=e&&e.code||"";if(c==="expired"){AG.tok=null;st.textContent="La connexion à l’agenda a expiré : reconnecte-toi."}
+  else if(c==="api-off")st.innerHTML='L’API Google Agenda n’est pas encore activée pour Valtera. Ouvre <a href="'+AG_ENABLE+'" target="_blank" rel="noopener">ce lien</a>, clique sur « Activer », puis réessaie (une seule fois).';
+  else if(!navigator.onLine)st.textContent="Pas de réseau : l’agenda sera lisible au retour de la connexion.";
+  else st.textContent="Lecture de l’agenda impossible"+(e&&e.msg?" : "+e.msg:"")+".";AG.busy=false;agRender()}
+/* ---------- dialogue ---------- */
+function agRender(){const on=!!(AG.tok&&AG.exp>Date.now());$("#agConn").hidden=on;$("#agAcc").hidden=!on;$("#agWho").textContent=on&&AG.email?AG.email:"";
+  const sel=$("#agCal");sel.hidden=!on||!AG.cals.length;sel.innerHTML=AG.cals.map(c=>'<option value="'+esc(c.id)+'"'+(c.id===AG.cal?" selected":"")+">"+esc(c.name)+"</option>").join("");
+  $("#agDate").value=AG.date;const L=$("#agList");L.innerHTML="";if(!on){L.append(h("div",{class:"agempty"},h("b",{text:"Connecte ton agenda Google"}),h("p",{class:"meta",text:"Valtera lit seulement tes rendez-vous (lecture seule) pour remplir la fiche : numéro du dossier, date, client, coordonnées GPS, contact et téléphone. Tu peux choisir le compte Tinsa : ta connexion Valtera ne change pas."})));return}
+  AG.events.forEach(ev=>{const p=ev.p,ex=agExisting(p),k=h("select",{class:"agkind","aria-label":"Type de fiche"});[["bien","Fiche de visite"],["terrain","Fiche terrain"],["avancement","État d’avancement"]].forEach(([v,t])=>{const o=h("option",{value:v,text:t});if(v===p.kind)o.selected=true;k.append(o)});
+    const chips=h("div",{class:"agchips"});[p.dossier&&["Dossier "+p.dossier,"num"],p.typeTxt&&[p.typeTxt],p.lieu&&[p.lieu],p.client&&[p.client],p.gps&&["GPS","ok"],(p.contact||p.tel)&&[[p.contact,p.tel].filter(Boolean).join(" · ")]].filter(Boolean).forEach(([t,c])=>chips.append(h("span",{class:"chip"+(c?" "+c:""),text:t})));
+    const acts=h("div",{class:"agacts"});if(ex)acts.append(h("button",{type:"button",class:"btn sm",text:"Ouvrir "+(ex.ref||"la fiche"),onclick:()=>{$("#agDlg").close();openVisite(ex)}}));
+    acts.append(k,h("button",{type:"button",class:"btn sm pri",text:ex?"Nouvelle fiche":"Créer la fiche",onclick:()=>agCreate(p,k.value)}));
+    L.append(h("div",{class:"agcard"+(ex?" done":"")},h("div",{class:"agtime",text:p.heure||"Journée"}),h("div",{class:"agbody"},h("b",{text:p.title||"(sans titre)"}),chips,
+      p.notes.length?h("div",{class:"meta agnotes",text:p.notes.slice(0,3).join(" · ")}):null,ex?h("div",{class:"agdone",text:"Fiche déjà créée : "+(ex.ref||"")+(ex.date?" · "+ex.date.split("-").reverse().join("/"):"")}):null,acts)))})}
+function agShift(n){const d=new Date(AG.date+"T12:00:00");d.setDate(d.getDate()+n);AG.date=agDateISO(d);agFetch()}
+function agOpen(){if(!isOwner())return;agLoad();if(!AG.date)AG.date=agDateISO(new Date());AG.events=[];$("#agSt").textContent="";$("#agPaste").value="";$("#agDlg").showModal();agRender();
+  if(AG.tok&&AG.exp>Date.now())agFetch()}
+(function(){if(!$("#agDlg"))return;
+  $("#agConn").onclick=agConnect;$("#agSwitch").onclick=()=>{AG.tok=null;AG.cals=[];agSaveTok();agConnect()};
+  $("#agPrev").onclick=()=>agShift(-1);$("#agNext").onclick=()=>agShift(1);$("#agToday").onclick=()=>{AG.date=agDateISO(new Date());agFetch()};
+  $("#agTomorrow").onclick=()=>{const d=new Date();d.setDate(d.getDate()+1);AG.date=agDateISO(d);agFetch()};
+  $("#agDate").onchange=e=>{if(e.target.value){AG.date=e.target.value;agFetch()}};
+  $("#agCal").onchange=e=>{AG.cal=e.target.value;try{LS.set("vt_ag_cal",AG.cal)}catch(_){}agFetch()};
+  $("#agPasteGo").onclick=()=>{const t=$("#agPaste").value.trim();if(!t){toast("Colle d’abord le texte du rendez-vous.");return}
+    const ls=t.split(/\n/).map(s=>s.trim()).filter(Boolean),title=ls.find(l=>/\d{3,5}\s*\/\s*20\d{2}/.test(l))||ls[0];
+    const p=agParse(title,ls.filter(l=>l!==title).join("\n"),null,null);if(!p.date)p.date=AG.date||agDateISO(new Date());agCreate(p)};
+  $("#agBtn").onclick=agOpen;$("#agFromKind").onclick=()=>{$("#kindDlg").close();agOpen()};
+})();
+function agRole(){const own=typeof isOwner==="function"&&isOwner();const b=$("#agBtn"),k=$("#agFromKind");if(b)b.hidden=!own;if(k)k.hidden=!own}

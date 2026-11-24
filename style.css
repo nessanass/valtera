@@ -747,3 +747,35 @@ dialog#ckDlg[open]{display:flex;flex-direction:column}
   .cklen input{width:92px}
 }
 @media (pointer:fine){.ckkp button{height:34px}}
+
+/* ---------- agenda ---------- */
+.vis-head .agbtn{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+.vis-head .agbtn+.fab{margin-left:8px}
+#kindDlg .agopt{border-color:var(--brand);background:var(--brand-soft)}
+#kindDlg .agopt svg{color:var(--brand)}
+.agbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.agnav,.agacc,#agAcc{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.agnav input[type=date]{width:auto;flex:0 1 170px;min-width:0;padding:7px 10px;border-radius:10px}
+.agnav .btn{flex:0 0 auto}
+#agConn{display:inline-flex;align-items:center;gap:8px}
+#agCal{width:auto;max-width:260px;padding:7px 10px;border-radius:10px}
+#agSt{min-height:1.2em;margin:10px 0 6px}
+#agSt a{color:var(--brand);font-weight:600}
+.aglist{display:flex;flex-direction:column;gap:10px}
+.agcard{display:flex;gap:12px;border:1px solid var(--line);border-radius:16px;padding:12px;background:var(--surface);min-width:0}
+.agcard.done{border-style:dashed}
+.agtime{flex:0 0 auto;font:700 13px/1.3 inherit;color:var(--brand);font-variant-numeric:tabular-nums;min-width:86px}
+.agbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px}
+.agbody>b{font-size:14.5px;overflow-wrap:anywhere}
+.agchips{display:flex;flex-wrap:wrap;gap:5px}
+.agchips .chip.num{font-variant-numeric:tabular-nums}
+.agnotes{overflow-wrap:anywhere}
+.agdone{font-size:12.5px;color:var(--ok,#15803d);font-weight:600}
+.agacts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
+.agkind{width:auto;padding:6px 8px;border-radius:10px;font-size:13px}
+.agempty{border:1px dashed var(--line);border-radius:16px;padding:18px;text-align:center}
+.agempty p{max-width:520px;margin:6px auto 0}
+.agpaste{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.agpaste summary{cursor:pointer;font-weight:600;color:var(--muted)}
+.agpaste textarea{width:100%;margin:8px 0;font:13px/1.4 inherit}
+@media (max-width:640px){.agcard{flex-direction:column;gap:4px}.agtime{min-width:0}.agacts{justify-content:flex-start}.vis-head .agbtn span{display:none}}

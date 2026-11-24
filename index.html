@@ -11,14 +11,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Valtera">
-<script src="boot.js?v=20261123030830"></script>
+<script src="boot.js?v=20261124160021"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <link rel="preload" href="vendor/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261123030830">
+<link rel="stylesheet" href="style.css?v=20261124160021">
 </head>
 <body>
 <section class="gate gut" id="gate" hidden>
@@ -182,7 +182,7 @@
 
 <section class="gut vis" id="visitesView" hidden>
   <div class="in">
-    <div class="hero vhero"><div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Fiche de visite, fiche terrain et état d’avancement : remplies sur place, téléchargées en PDF.</p></div><button class="btn pri fab" type="button" id="visAdd"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span><span>Nouvelle fiche</span></button></div>
+    <div class="hero vhero"><div class="vis-head"><div><h2>Fiches de visite</h2><p class="meta">Fiche de visite, fiche terrain et état d’avancement : remplies sur place, téléchargées en PDF.</p></div><button class="btn agbtn" type="button" id="agBtn" hidden><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12.5" rx="2.5"/><path d="M3 8.5h14M7 2.8v3.4M13 2.8v3.4"/><path d="M7 12h2M11 12h2M7 14.6h2"/></svg><span>Agenda</span></button><button class="btn pri fab" type="button" id="visAdd"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span><span>Nouvelle fiche</span></button></div>
     <div class="vsearch"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="visSearch" type="search" placeholder="Rechercher une fiche…" aria-label="Rechercher une fiche"><select id="visKindF" aria-label="Type de fiche"><option value="">Tous les types</option><option value="bien">Bâti</option><option value="terrain">Terrain</option><option value="avancement">État d’avancement</option></select><select id="visByF" aria-label="Ajoutée par" hidden><option value="">Tout le monde</option></select><span class="meta" id="visCount"></span></div></div>
     <div class="vlist" id="visList"></div>
   </div>
@@ -436,9 +436,28 @@
     <button class="btn" id="visCopy" type="button">Copier le texte</button><button class="btn" id="visTemoin" type="button" hidden>Créer un témoin</button><button class="btn" id="visShare" type="button" data-share="1" hidden>Partager</button><button class="btn" id="visPdf" type="button">Télécharger (PDF)</button><button class="btn pri" id="visSave" type="button">Enregistrer</button></div>
 </dialog>
 <div id="printArea" aria-hidden="true"></div>
+
+<dialog id="agDlg" class="wide">
+  <div class="dh"><div><h2>Agenda des visites</h2><div class="meta">Choisis un rendez-vous : la fiche se remplit avec le dossier, la date, le client, le GPS et le contact. Tu complètes le reste sur place.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
+  <div class="db">
+    <div class="agbar">
+      <div class="agnav"><button type="button" class="btn sm" id="agPrev" aria-label="Jour précédent">‹</button><input type="date" id="agDate" aria-label="Date"><button type="button" class="btn sm" id="agNext" aria-label="Jour suivant">›</button>
+        <button type="button" class="btn sm" id="agToday">Aujourd’hui</button><button type="button" class="btn sm" id="agTomorrow">Demain</button></div>
+      <div class="agacc"><button type="button" class="btn pri" id="agConn"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12.5" rx="2.5"/><path d="M3 8.5h14M7 2.8v3.4M13 2.8v3.4"/><path d="M7 12h2M11 12h2M7 14.6h2"/></svg><span>Connecter l’agenda Google</span></button>
+        <div id="agAcc" hidden><select id="agCal" aria-label="Agenda"></select><span class="meta" id="agWho"></span><button type="button" class="linkbtn" id="agSwitch">Changer de compte</button></div></div>
+    </div>
+    <p class="note" id="agSt" role="status"></p>
+    <div class="aglist" id="agList"></div>
+    <details class="agpaste"><summary>Coller un rendez-vous (sans connexion Google)</summary>
+      <p class="meta">Dans Google Agenda, copie le titre et la description du rendez-vous, colle-les ici : Valtera lit le dossier, le GPS, le client et le contact.</p>
+      <textarea id="agPaste" rows="4" placeholder="1234/2026 /// VISITE 1 // Appartement // Maarif&#10;NOM DU CLIENT&#10;33.5899, -7.6324"></textarea>
+      <button type="button" class="btn" id="agPasteGo">Lire et créer la fiche</button></details>
+  </div>
+</dialog>
 <dialog id="kindDlg">
   <div class="dh"><div><h2>Nouvelle fiche</h2><div class="meta">Choisis le type de fiche.</div></div><button class="btn" type="button" data-close>Fermer</button></div>
   <div class="db kinds">
+    <button type="button" class="kindopt agopt" id="agFromKind" hidden><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12.5" rx="2.5"/><path d="M3 8.5h14M7 2.8v3.4M13 2.8v3.4"/><path d="M7 12h2M11 12h2M7 14.6h2"/></svg><b>Depuis l’agenda Google</b><span class="meta">Choisis un rendez-vous : dossier, date, client, GPS et contact déjà remplis</span></button>
     <button type="button" class="kindopt" data-kind="bien"><b>Fiche de visite</b><span class="meta">Appartement, villa, maison, local commercial, usine</span></button>
     <button type="button" class="kindopt" data-kind="terrain"><b>Fiche de visite : Terrain</b><span class="meta">Destination, viabilité, topographie, voie d’accès, servitudes</span></button>
     <button type="button" class="kindopt" data-kind="avancement"><b>État d’avancement</b><span class="meta">Avancement des travaux par lot et sous-lot, avancement global</span></button>
@@ -498,7 +517,7 @@
 <script src="vendor/firebase/firebase-app-compat.js"></script>
 <script src="vendor/firebase/firebase-auth-compat.js"></script>
 <script src="vendor/firebase/firebase-firestore-compat.js"></script>
-<script src="config.js?v=20261123030830"></script>
-<script src="app.js?v=20261123030830"></script>
+<script src="config.js?v=20261124160021"></script>
+<script src="app.js?v=20261124160021"></script>
 </body>
 </html>
