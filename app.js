@@ -79,7 +79,7 @@ function isOld(c){const a=ageMonths(c);return a!=null&&a>S.valid}
 function stats(vals){const v=vals.filter(x=>x!=null&&isFinite(x)).sort((a,b)=>a-b);const n=v.length;if(!n)return null;const mean=v.reduce((a,b)=>a+b,0)/n;const q=p=>{const i=(n-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return v[lo]+(v[hi]-v[lo])*(i-lo)};const sd=n>1?Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)):0;return {n,min:v[0],max:v[n-1],mean,med:q(.5),q1:q(.25),q3:q(.75),sd,cv:mean?sd/mean:0}}
 function statusClass(s){return s==="Vérifié"?"st-ok":s==="À vérifier"?"st-warn":s==="Rejeté"?"st-bad":"st-old"}
 function fillSelect(sel,opts,first){sel.length=0;if(first!==undefined)sel.add(new Option(first,""));opts.forEach(o=>sel.add(new Option(o,o)))}
-function ensureOpt(sel,v){if(v&&![...sel.options].some(o=>o.value===v))sel.add(new Option(v,v))}
+function ensureOpt(sel,v){if(!sel||!sel.options||!v)return;if(![...sel.options].some(o=>o.value===v))sel.add(new Option(v,v))}
 function basisDefault(type){return LAND_TYPES.includes(type)?"terrain":"bati"}
 function basisOf(c){return c.basis||basisDefault(c.type)}
 
@@ -502,7 +502,8 @@ function updCalc(fromSurface){
 $("#f_price").addEventListener("input",()=>{lastEdited="price";const r=retained(),p=fv("price");$("#f_ppm").value=p!=null&&r?plain(Math.round(p/r)):"";updCalc()});
 $("#f_ppm").addEventListener("input",()=>{lastEdited="ppm";const r=retained(),u=fv("ppm");if(u!=null&&r)$("#f_price").value=plain(Math.round(u*r));updCalc()});
 ["avance","loyer"].forEach(k=>$("#f_"+k).addEventListener("input",()=>updCalc()));
-$("#f_gps").addEventListener("input",()=>{const g=coordsFrom($("#f_gps").value);if(g&&!$("#f_city").value.trim()){const c=guessCity(g);if(c)$("#f_city").value=c}updCalc()});
+$("#f_gps").addEventListener("input",()=>{const g=coordsFrom($("#f_gps").value);if(g&&!$("#f_city").value.trim()){const c=nearCity(g);if(c){$("#f_city").value=c;$("#f_city").dataset.auto="1"}}updCalc()});
+["#f_city","#f_district"].forEach(s=>$(s).addEventListener("input",e=>{if(e.isTrusted){e.target.dataset.typed="1";delete e.target.dataset.auto}}));
 NUMS.concat(["ppm"]).forEach(k=>$("#f_"+k).addEventListener("blur",e=>{const raw=e.target.value,sf=SURF_KEYS.has(k);if((k==="price"||k==="ppm")&&/[a-zà-ÿء-ي\/]/i.test(raw)&&priceSmart(k,raw))return;const n=sf?surfIn(raw):numIn(raw);if(k==="price"&&n!=null&&n>=200000&&tx==="Location"){setTx("Vente");toast(fmt(n)+" DH sans « /mois » : prix total → Vente")}if(n!=null){e.target.value=plain(n);if(sf&&/[a-zء-ي+]/i.test(raw)&&!/^\s*[\d\s.,]+\s*(?:m²|m2|m)?\s*$/i.test(raw)){toast("« "+raw.trim()+" » = "+fmtS(n)+" m²");updCalc(true)}}}));
 
 function openForm(c,preset){
@@ -517,6 +518,7 @@ function openForm(c,preset){
   photos=c?.photos?[...c.photos]:[];renderThumbs();
   if(!c&&natView==="tr"){$("#f_nature").value="Transaction";ensureOpt($("#f_source"),"Conservation foncière");$("#f_source").value="Conservation foncière";$("#f_status").value="Vérifié";$("#f_date").value="";$("#dlgTitle").textContent="Nouvelle transaction"}
   lastEdited="price";setTx(c?.tx||"Vente");updTrans();
+  $("#f_gps").dataset.orig=$("#f_gps").value.trim();["#f_city","#f_district"].forEach(s=>{const e=$(s);delete e.dataset.auto;delete e.dataset.typed});
   const r=retained();$("#f_ppm").value=c?.price&&r?plain(Math.round(c.price/r)):"";updCalc();
   $("#qText").value=preset||"";$("#qStatus").textContent="";clearShot();
   $("#delBtn").hidden=!c||!canDelete();$("#photoBtn").disabled=$("#camBtn").disabled=!online;
@@ -1513,9 +1515,14 @@ async function nearStreets(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);
 function streetLine(streets){if(!streets||!streets.length)return null;const [s1,s2]=streets;
   if(s2&&s1.d<=40&&s2.d<=30)return {rue:"Angle "+s1.n+" et "+s2.n,angle:true};if(s1.d<=45)return {rue:s1.n,angle:false};return null}
 const ADMIN_RE=/^(arrondissement|préfecture|prefecture|pachalik|commune|province|cercle|caïdat|caidat)\b/i;
+function cleanAdm(s){return String(s||"").replace(/^(?:commune(?:\s+(?:rurale|urbaine))?|municipalit[ée]|cercle|province|pr[ée]fecture|ca[ïi]dat|annexe|arrondissement|pachalik)\s+(?:de\s+la\s+|de\s+l['’]\s*|de\s+|d['’]\s*|du\s+|des\s+)?/i,"").trim()}
+function nearCity(g){const c=guessCity(g);if(c)return c;let best=null;(typeof items!=="undefined"?items:[]).forEach(t=>{const p=t.lat!=null&&t.lng!=null?[t.lat,t.lng]:coordsFrom(t.gps||"");if(!p||!t.city)return;const d=distM(g,p);if(d<=5000&&(!best||d<best[1]))best=[t.city,d]});
+  if(best)return best[0];for(const [n,la,lo,r] of CITIES){if(distM(g,[la,lo])/1000<=r*1.6)return n}return ""}
 async function nomAddr(lat,lng){const key=lat.toFixed(5)+","+lng.toFixed(5);if(NOM_CACHE[key])return NOM_CACHE[key];
   const n=await fetchJson("https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=fr&lat="+lat+"&lon="+lng,null,12000);
-  const a=n?.address||{};const ville=latinName(a.city||a.town||a.village||"");
+  const a=n?.address||{};let ville=latinName(a.city||a.town||cleanAdm(a.municipality)||"");
+  if(!ville){try{const z=await fetchJson("https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=10&accept-language=fr&lat="+lat+"&lon="+lng,null,10000);const b=z?.address||{};ville=latinName(b.city||b.town||cleanAdm(b.municipality)||cleanAdm(b.county)||cleanAdm(z?.name)||"")}catch(e){}}
+  if(!ville)ville=latinName(a.village||a.hamlet||"");
   const quartier=latinName([a.quarter,a.neighbourhood,a.suburb,a.city_district].find(x=>x&&!ADMIN_RE.test(x))||"");
   const commune=latinName([a.suburb,a.city_district,a.municipality,a.county].find(x=>x&&/^(arrondissement|commune)\b/i.test(x))||a.municipality||ville);
   const adm=v=>latinName(v||"").replace(/^(r[ée]gion|province|pr[ée]fecture(\s+d['’]arrondissements)?|pachalik|cercle)\s+(de\s+la\s+|de\s+l['’]|de\s+|d['’]\s*|du\s+|des\s+)?/i,"").trim();
@@ -1533,7 +1540,7 @@ async function visGeocode(force){const g=coordsFrom($("#v_gps")?.value||"");cons
   let nom=null,sl=null,done=0;
   const msg=()=>{if(!live())return;const rue=$("#v_rue").value;
     st.textContent=sl?.angle?"Angle trouvé sur OpenStreetMap : "+sl.rue+". Vérifie sur place.":done<2?"Adresse trouvée"+(rue?" : "+rue:"")+". Recherche d’un angle de rues…":rue?"Rue trouvée sur OpenStreetMap : "+rue+". Vérifie sur place.":nom||sl?"Adresse partielle trouvée sur OpenStreetMap : complète la rue.":"Adresse introuvable pour ce point : complète à la main."};
-  const pN=nomAddr(g[0],g[1]).then(r=>{nom=r;if(!live())return;if(!sl)put("rue",r.rue);put("num",r.num);put("quartier",r.quartier);put("ville",r.ville);put("commune",r.commune);put("codePostal",r.codePostal)}).catch(()=>{}).finally(()=>{done++;msg()});
+  const pN=nomAddr(g[0],g[1]).then(r=>{nom=r;if(!live())return;if(!sl)put("rue",r.rue);put("num",r.num);put("quartier",r.quartier);put("ville",r.ville||nearCity(g));put("commune",r.commune);put("codePostal",r.codePostal)}).catch(()=>{}).finally(()=>{done++;msg()});
   const pS=nearStreets(g[0],g[1]).then(r=>{sl=streetLine(r);if(live()&&sl)put("rue",sl.rue)}).catch(()=>{}).finally(()=>{done++;msg()});
   await Promise.all([pN,pS])}
 $("#visBody").addEventListener("input",e=>{if(e.target.dataset&&e.target.dataset.auto)delete e.target.dataset.auto});
@@ -1544,9 +1551,13 @@ let temSeq=0;
 async function temGeocode(){const g=coordsFrom($("#f_gps").value);if(!g||!navigator.onLine)return;const seq=++temSeq;
   const live=()=>seq===temSeq&&$("#dlg").open&&String(coordsFrom($("#f_gps").value))===String(g);let n=0,rue="";
   const put=(id,v)=>{const e=$(id);if(e&&v&&!e.value.trim()){e.value=v;e.dispatchEvent(new Event("input"));n++}};
-  const city=v=>{if(v&&!$("#f_city").value.trim()){ensureOpt($("#f_city"),v);$("#f_city").value=v;$("#f_city").dispatchEvent(new Event("change"));n++}};
-  try{const r=await nomAddr(g[0],g[1]);if(!live())return;put("#f_district",r.quartier);city(r.ville);put("#f_commune",r.commune);put("#f_province",r.province);put("#f_region",r.region);put("#f_cp",r.codePostal);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
-  if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
+  const moved=String(coordsFrom($("#f_gps").dataset.orig||""))!==String(g),nrm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
+  const city=v=>{const e=$("#f_city"),cur=e.value.trim();if(!v||nrm(cur)===nrm(v))return;if(cur&&e.dataset.auto!=="1"&&!(moved&&e.dataset.typed!=="1"))return;
+    ensureOpt(e,v);e.value=v;e.dataset.auto="1";e.dispatchEvent(new Event("change"));n++;if(cur)cityMsg="Ville mise à jour d’après les coordonnées : "+v+" (avant : "+cur+")"};let cityMsg="";
+  const dist=v=>{const e=$("#f_district"),cur=e.value.trim();if(!v||cur===v)return;if(cur&&e.dataset.auto!=="1"&&!(moved&&e.dataset.typed!=="1"))return;e.value=v;e.dataset.auto="1";e.dispatchEvent(new Event("input"));n++};
+  let gotCity=false;try{const r=await nomAddr(g[0],g[1]);if(!live())return;dist(r.quartier);if(moved&&!r.quartier){const e=$("#f_district");if(e.value.trim()&&e.dataset.typed!=="1"){e.value="";e.dataset.auto="1";e.dispatchEvent(new Event("input"))}}if(r.ville){city(r.ville);gotCity=true}put("#f_commune",r.commune);put("#f_province",r.province);put("#f_region",r.region);put("#f_cp",r.codePostal);if(r.rue){put("#f_address",r.rue);rue=r.rue}}catch(e){}
+  if(!gotCity&&live()){const c=nearCity(g);if(c)city(c)}
+  if(cityMsg)toast(cityMsg);else if(n)toast("Ville et quartier complétés depuis OpenStreetMap");
   try{const sl=streetLine(await nearStreets(g[0],g[1]));if(!live()||!sl?.rue)return;const a=$("#f_address");
     if(!a.value.trim()||(rue&&a.value===rue&&sl.angle)){a.value=sl.rue;a.dispatchEvent(new Event("input"));toast("Adresse : "+sl.rue)}}catch(e){}}
 /* ===================== signature du visiteur ===================== */
