@@ -1,6 +1,6 @@
 'use strict';
 /* ===================== constantes ===================== */
-const TYPES=["Appartement","Villa","Maison","Local commercial","Bureau","Plateau de bureaux","Terrain","Entrepôt / dépôt","Immeuble","Usine","Riad","Autre"];
+const TYPES=["Appartement","Villa","Maison","Local commercial","Bureau","Plateau de bureaux","Terrain","Entrepôt / dépôt","Immeuble","Usine","Riad","Parking / box","Autre"];
 const TXS=["Vente","Location","Pas-de-porte"];
 const STATUS=["À vérifier","Vérifié","Vendu / loué","Rejeté"];
 const NATURES=["Offre","Transaction","Expertise","Estimation agence"];
@@ -8,7 +8,7 @@ const SOURCES=["Conservation foncière","Visite terrain","Agence / courtier","Pa
 const STATES=["Neuf","Bon état","Moyen","À rénover","En construction","Gros œuvre"];
 const STANDINGS=["Économique","Moyen standing","Haut standing","Luxe"];
 const LAND_TYPES=["Terrain","Villa","Maison"];
-const TCOL={"Appartement":"#2f6fdf","Villa":"#2f9e5f","Maison":"#7a9e2f","Local commercial":"#d9772f","Bureau":"#8a4fd1","Plateau de bureaux":"#b04fd1","Terrain":"#a3742c","Entrepôt / dépôt":"#5b6770","Usine":"#5b6770","Immeuble":"#c0392b","Riad":"#d1a12f","Autre":"#888"};
+const TCOL={"Appartement":"#2f6fdf","Villa":"#2f9e5f","Maison":"#7a9e2f","Local commercial":"#d9772f","Bureau":"#8a4fd1","Plateau de bureaux":"#b04fd1","Terrain":"#a3742c","Entrepôt / dépôt":"#5b6770","Usine":"#5b6770","Immeuble":"#c0392b","Riad":"#d1a12f","Parking / box":"#3d7f8f","Autre":"#888"};
 const CITIES=[["Casablanca",33.573,-7.59,12.5],["Dar Bouazza",33.52,-7.81,8],["Bouskoura",33.45,-7.65,7],["Nouaceur",33.37,-7.58,6],["Mohammedia",33.687,-7.383,9],["Berrechid",33.265,-7.587,6],["Settat",33.0,-7.62,7],["El Jadida",33.25,-8.5,8],["Rabat",34.0,-6.84,8],["Salé",34.045,-6.8,7],["Témara",33.92,-6.91,7],["Kénitra",34.26,-6.58,9],["Marrakech",31.63,-8.0,15],["Béni Mellal",32.337,-6.36,8],["Fès",34.03,-5.0,12],["Meknès",33.89,-5.55,10],["Tanger",35.76,-5.83,12],["Agadir",30.42,-9.58,12],["Oujda",34.68,-1.91,10]];
 const PAGE_CARDS=60,PAGE_ROWS=200;
 
@@ -595,7 +595,7 @@ function smartParse(raw){
     .replace(/(?:ال)?ميزانين|ميزانيل|(?:ال)?سدة/g," mezz ")
     .replace(/\s+/g," ");
   const HAC=haConv(t,false);t=HAC.t;HAC.conv.forEach(c=>out.notes.push("« "+c.src+" » converti en "+fmtS(c.v)+" m²."));
-  const T=[[/\bvilla|demi[- ]villa|فيلا/,"Villa"],[/\bimmeuble\b/,"Immeuble"],[/\bplateau/,"Plateau de bureaux"],[/\bbureaux?\b/,"Bureau"],[/\bstudio|\bappart|\bapp\b|\bapprt|\bduplex|شقة/,"Appartement"],[/\blocal\b|\blocaux\b|\bmagasin|\bcommerce\b|\bboutique|\bmahal\b|محل/,"Local commercial"],[/\bd[ée]p[ôo]t|\bhangar|\bentrep[ôo]t/,"Entrepôt / dépôt"],[/\busine\b/,"Usine"],[/\bmaison\b|\bdar\b|دار /,"Maison"],[/\briad\b/,"Riad"],[/\bterrain|\blot\b|\bparcelle|\bferme\b|\bhectare|أرض|ارض|إرض|بقعة|بقعه|فلاحي/,"Terrain"]];
+  const T=[[/\bvilla|demi[- ]villa|فيلا/,"Villa"],[/\bimmeuble\b/,"Immeuble"],[/\bplateau/,"Plateau de bureaux"],[/\bbureaux?\b/,"Bureau"],[/\bstudio|\bappart|\bapp\b|\bapprt|\bduplex|شقة/,"Appartement"],[/\blocal\b|\blocaux\b|\bmagasin|\bcommerce\b|\bboutique|\bmahal\b|محل/,"Local commercial"],[/\bd[ée]p[ôo]t|\bhangar|\bentrep[ôo]t/,"Entrepôt / dépôt"],[/\busine\b/,"Usine"],[/\bmaison\b|\bdar\b|دار /,"Maison"],[/\briad\b/,"Riad"],[/\bterrain|\blot\b|\bparcelle|\bferme\b|\bhectare|أرض|ارض|إرض|بقعة|بقعه|فلاحي/,"Terrain"],[/\bp\.?\s*parking|\bparking|\bgarage\b|\bbox\b|باركينغ|باركينج|كاراج/,"Parking / box"]];
   out.type=(T.find(([r])=>r.test(t))||[])[1]||null;if(!out.type&&HAC.conv.length)out.type="Terrain";
   const sar=/\b(sarout|sarrout|sarot|saroute|pas[- ]de[- ]porte|hlaou?ane|hlawan|droit au bail|fonds? de commerce)\b|ساروت/.test(t);
   const rent=/(à|a)\s*lou(er|é|e)\b|\blou(er|é)\b|\blocation\b|\bloyer\b|par\s*mois|\/\s*mois|\bmensuel|\bkra\b|\bkira\b|lkra|للكراء|كراء/.test(t);
