@@ -363,7 +363,8 @@ function renderCards(r){
       c._d!=null?h("div",{class:"dist"},ic("pin",14),"à "+(c._d>=1000?(c._d/1000).toFixed(2).replace(".",",")+" km":Math.round(c._d)+" m")):null,
       h("div",{class:"kv loc"},h("span",{class:"k",text:"Localisation"}),h("span",{class:"v",text:loc})),
       h("div",{class:"acts"},canEditItem(c)?h("button",{class:"btn sm",type:"button",onclick:e=>{e.stopPropagation();openForm(c)}},ic("edit",14),"Modifier"):null,
-        g?h("button",{class:"btn sm",type:"button",onclick:e=>{e.stopPropagation();showOnMap(c)}},ic("pin",14),"Carte"):null));
+        g?h("button",{class:"btn sm",type:"button",onclick:e=>{e.stopPropagation();showOnMap(c)}},ic("pin",14),"Carte"):null,
+        h("button",{class:"btn sm",type:"button",title:"Copier les infos du témoin",onclick:async e=>{e.stopPropagation();if(await copyText(summaryText(c),e.currentTarget.querySelector(".cpl")))toast("Infos du témoin copiées")}},ic("copy",14),h("span",{class:"cpl",text:"Copier"}))));
     L.append(h("article",{class:"card"+(on?" sel":""),tabindex:"0","aria-label":[tx,c.type,c.ref,loc].filter(Boolean).join(", "),
       onclick:e=>{if(e.target.closest("button,label,input,a"))return;openView(c)},onkeydown:e=>{if(e.key==="Enter"&&e.target===e.currentTarget)openView(c)}},ph,bd));
   });
@@ -464,7 +465,8 @@ $("#vSel").onclick=()=>{toggleSel(viewing.id);$("#vSel").textContent=sel.has(vie
 $("#vNear").onclick=()=>{const g=gpsOf(viewing);if(!g){toast("Cette fiche n’a pas de position GPS.");return}
   $("#view").close();if($("#etude").open)$("#etude").close();FIDS.forEach(i=>$("#"+i).value="");$("#near").value=gpsStr(g);$("#radius").value="1000";$("#fType").value=viewing.type||"";$("#fTx").value=viewing.tx||"";
   $("#filters").hidden=false;shown=0;mv=null;render();window.scrollTo({top:0})};
-async function copyText(t,btn){try{await navigator.clipboard.writeText(t);if(btn){const o=btn.textContent;btn.textContent="Copié";setTimeout(()=>btn.textContent=o,1500)}}catch(e){toast("Copie impossible ici : sélectionne le numéro à la main.")}}
+function copyFallback(t){const ta=document.createElement("textarea");ta.value=t;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;top:0;left:0;opacity:0";document.body.append(ta);ta.select();ta.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand("copy")}catch(e){}ta.remove();return ok}
+async function copyText(t,btn){try{try{await navigator.clipboard.writeText(t)}catch(e1){if(!copyFallback(t))throw e1}if(btn){const o=btn.textContent;btn.textContent="Copié";setTimeout(()=>btn.textContent=o,1500)}return true}catch(e){toast("Copie impossible ici : sélectionne le texte à la main.");return false}}
 
 /* ===================== fiche : saisie ===================== */
 let editing=null,tx="Vente",basis="bati",basisTouched=false,photos=[],lastEdited="price",shot=null,delArmed=false,dupOk=false;
@@ -1052,7 +1054,7 @@ function drawMap(r){
   pts.forEach(({c,g})=>{
     if(sel.has(c.id))L.circleMarker(g,{radius:12,color:brand,weight:3,fill:false,interactive:false}).addTo(ptsLayer);
     const m=L.circleMarker(g,{radius:7,color:"#ffffff",weight:1.5,fillColor:TCOL[c.type]||"#888888",fillOpacity:.95}).addTo(ptsLayer);
-    m.bindPopup(()=>popupFor(c),{maxWidth:300});markers.push({m,c})});
+    m.bindPopup(()=>popupFor(c),{maxWidth:Math.min(300,innerWidth-110),autoPanPaddingTopLeft:L.point(58,12),autoPanPaddingBottomRight:L.point(12,12)});markers.push({m,c})});
   updLabels();
   if(center){L.circle(center,{radius:rad,color:rent,weight:2,dashArray:"6 6",fill:false,interactive:false}).addTo(ovLayer);L.circleMarker(center,{radius:6,color:"#ffffff",weight:2,fillColor:rent,fillOpacity:1,interactive:false}).addTo(ovLayer)}
   drawZone();
@@ -1065,7 +1067,7 @@ function drawMap(r){
 function popupFor(c){const g=gpsOf(c);
   return h("div",{class:"mc-pop"},h("div",{style:"font-weight:600",text:(c.type||"")+" · "+c.tx}),h("div",{class:"price"},fmt(c.price),h("small",{text:priceSuf(c.tx)})),surfLine(c),
     h("div",{class:"meta",text:[[c.district,c.city].filter(Boolean).join(", "),c.contactTel,c._d!=null?"à "+Math.round(c._d)+" m":""].filter(Boolean).join(" · ")}),
-    h("div",{class:"acts"},h("button",{class:"btn sm",type:"button",text:"Fiche",onclick:()=>openView(c)}),
+    h("div",{class:"acts"},h("button",{class:"btn sm pri",type:"button",title:"Copier les infos du témoin",onclick:async e=>{if(await copyText(summaryText(c),e.currentTarget.querySelector(".cpl")))toast("Infos du témoin copiées")}},ic("copy",14),h("span",{class:"cpl",text:"Copier"})),h("button",{class:"btn sm",type:"button",text:"Fiche",onclick:()=>openView(c)}),
       h("button",{class:"btn sm",type:"button",text:sel.has(c.id)?"Retirer de l’étude":"Ajouter à l’étude",onclick:()=>{toggleSel(c.id)}}),
       g?h("a",{class:"btn sm",target:"_blank",rel:"noopener",href:"https://www.google.com/maps/dir/?api=1&destination="+g[0]+","+g[1],text:"Itinéraire"}):null))}
 function mapClickPopup(ll){const g=[+ll.lat.toFixed(6),+ll.lng.toFixed(6)],s=gpsStr(g);
@@ -1905,7 +1907,7 @@ async function boot(){
 boot();
 
 /* ===================== design v2 : icônes, onglets, vignettes satellite ===================== */
-const ICONS={camera:'<path d="M4 8.6A1.6 1.6 0 0 1 5.6 7h2.1l1.5-2h5.6l1.5 2h2.1A1.6 1.6 0 0 1 20 8.6v9a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.6Z"/><circle cx="12" cy="12.8" r="3.3"/>',
+const ICONS={copy:'<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',camera:'<path d="M4 8.6A1.6 1.6 0 0 1 5.6 7h2.1l1.5-2h5.6l1.5 2h2.1A1.6 1.6 0 0 1 20 8.6v9a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 17.6Z"/><circle cx="12" cy="12.8" r="3.3"/>',
   building:'<rect x="5" y="3.5" width="14" height="17" rx="1.6"/><path d="M9 7.5h2M13 7.5h2M9 11h2M13 11h2M9 14.5h2M13 14.5h2M10.5 20.5v-3h3v3"/>',
   terrain:'<path d="M3 19.5 9 9.5l4 6 3-4 5 8Z"/><circle cx="16.5" cy="6" r="2"/>',
   crane:'<path d="M4 20.5h16M7 20.5V8.5l5.5-4.5v16.5M12.5 7h8M18 7v4.5M16.6 11.5h2.8"/>',
@@ -2139,11 +2141,12 @@ function ckHit(w){const tol=12/CK.s;let best=null;const cand=(d,lim,r)=>{if(d<li
   return best?best.r:null}
 function ckPush(){CK.hist.push(JSON.stringify(CK.plan.items));if(CK.hist.length>80)CK.hist.shift();CK.fut=[];CK.dirty=true;ckDraft()}
 function ckDraft(){try{LS.set("vt_ck_draft",{key:CK.key,plan:CK.plan,at:Date.now()})}catch(e){}}
-function ckEndWall(){if(CK.cur){if(CK.cur.pts.length<2)CK.plan.items=ckItems().filter(i=>i!==CK.cur);CK.cur=null}CK.hov=null;ckPanel();ckDraw()}
+function ckEndWall(){CK.fix=false;if(CK.cur){if(CK.cur.pts.length<2)CK.plan.items=ckItems().filter(i=>i!==CK.cur);CK.cur=null}CK.hov=null;ckPanel();ckDraw()}
 function ckAddPoint(p){if(!CK.cur){ckPush();CK.cur={t:CK.tool==="line"?"line":"wall",id:ckUid(),pts:[p],closed:false,th:CK.tool==="line"?0:CK.th};CK.plan.items.push(CK.cur)}
   else{const st=CK.cur.pts[0],last=CK.cur.pts[CK.cur.pts.length-1];if(Math.hypot(p[0]-last[0],p[1]-last[1])<.01){ckEndWall();return}ckPush();
     if(CK.cur.pts.length>=3&&Math.hypot(p[0]-st[0],p[1]-st[1])<.01){CK.cur.closed=true;CK.cur=null;toast("Pièce fermée");ckPanel();ckDraw();return}
     CK.cur.pts.push(p);CK.lastDir=Math.atan2(p[1]-last[1],p[0]-last[0])}
+  CK.fix=!!(CK.fixNext&&CK.cur&&CK.cur.pts.length>=2);CK.fixNext=false;if(CK.fix&&CK_COARSE)CK.kf="ckFixL";
   ckPanel();ckDraw()}
 function ckDirNow(){if(CK.cur&&CK.hov){const l=CK.cur.pts[CK.cur.pts.length-1],p=CK.hov.p;if(Math.hypot(p[0]-l[0],p[1]-l[1])>.05)return -Math.atan2(p[1]-l[1],p[0]-l[0])*180/Math.PI}return -CK.lastDir*180/Math.PI}
 function ckByLength(angDeg){const raw=($("#ckLen")?.value||"").trim(),pa=raw.match(/^@?\s*([\d.,]+)\s*[<∠]\s*(-?[\d.,]+)\s*$/);if(pa){$("#ckLen").value=pa[1];angDeg=toNum(pa[2])}
@@ -2167,12 +2170,16 @@ const CK_TH=[.07,.1,.15,.2,.25,.3,.4];
 function ckPanel(){const P=$("#ckPanel");if(!P)return;let h="";const T=CK.tool;
   if(CK.ro){P.innerHTML=ckHead("LECTURE SEULE","Glisse pour te déplacer, pince ou molette pour zoomer.");return}
   if(T==="wall"||T==="line"){const n=CK.cur?CK.cur.pts.length:0;
-    h=ckHead(T==="wall"?"MUR":"LIGNE",n?"Écris la longueur puis touche la direction, ou glisse sur le plan jusqu’au point suivant.":"Touche le point de départ, ou écris une longueur et une direction : le tracé part du dernier point.",1)+
+    const fx=CK.fix&&CK.cur&&n>=2?(()=>{const p=CK.cur.pts,a=p[n-2],b=p[n-1];return Math.hypot(b[0]-a[0],b[1]-a[1])})():null;
+    h=ckHead(T==="wall"?"MUR":"LIGNE",n?"Écris la longueur puis touche la direction, ou trace au doigt puis corrige la longueur exacte.":"Touche le point de départ, ou écris une longueur et une direction : le tracé part du dernier point.",1)+
+      (fx!=null?'<div class="ckfix"><b>Mur tracé : '+ckM(fx)+' m</b>'+ckNum("ckFixL","Longueur exacte (m)",ckM(fx),null,"sm")+'<button type="button" class="btn sm pri" id="ckFixGo">Corriger</button><button type="button" class="linkbtn" id="ckFixNo">C’est bon</button></div>':'')+
       '<div class="ckwork"><div class="ckcol"><div class="ckins">'+ckNum("ckLen","Longueur (m)",null,"ex. 3,5")+ckNum("ckAng","Angle (°)",null,"libre","sm")+'</div>'+ckKp()+'</div>'+
       '<div class="ckpad" role="group" aria-label="Direction du segment">'+[[135,"↖"],[90,"↑"],[45,"↗"],[180,"←"],[null,"↵"],[0,"→"],[225,"↙"],[270,"↓"],[315,"↘"]].map(([a,s])=>a==null?'<button type="button" class="ckdir ckok" id="ckGo" title="Tracer : angle écrit, sinon même direction" aria-label="Tracer">'+s+'</button>':'<button type="button" class="ckdir" data-a="'+a+'" title="'+a+'°" aria-label="Direction '+a+'°">'+s+'</button>').join("")+'</div></div>'+
       '<div class="ckrow">'+(T==="wall"?'<label class="cksel"><span>Épaisseur</span><select id="ckTh">'+CK_TH.map(v=>'<option value="'+v+'"'+(Math.abs(v-CK.th)<1e-6?" selected":"")+'>'+ckM(v)+' m</option>').join("")+'</select></label>':'')+
       '<button type="button" class="btn sm" id="ckUndoPt"'+(n?"":" disabled")+'>Annuler le point</button><button type="button" class="btn sm" id="ckClose"'+(n>=3?"":" disabled")+'>Fermer la pièce</button><button type="button" class="btn sm pri" id="ckEnd"'+(n?"":" disabled")+'>Terminer</button></div>'}
-  else if(T==="rect")h=ckHead("PIÈCE","Glisse d’un coin à l’autre sur le plan, ou écris les dimensions puis « Placer ».",1)+'<div class="ckwork"><div class="ckcol"><div class="ckins">'+ckNum("ckRw","Largeur (m)",null,"ex. 4")+ckNum("ckRl","Longueur (m)",null,"ex. 3,5")+'</div>'+ckKp()+'</div><div class="ckcol grow"><label class="cklen grow"><span>Nom de la pièce</span><input id="ckRn" placeholder="ex. Salon" list="ckRoomList" autocomplete="off"></label><div class="ckrow ckchips">'+["Salon","Chambre","Cuisine","SDB","Hall","Terrasse"].map(r=>'<button type="button" class="ckchip" data-rn="'+r+'">'+r+'</button>').join("")+'</div><button type="button" class="btn sm pri" id="ckRgo">Placer</button></div></div>';
+  else if(T==="rect"){const fr=CK.fixRect&&ckFind(CK.fixRect),wh=fr&&ckIsRect(fr)?ckRectWH(fr):null;
+    h=ckHead("PIÈCE","Glisse d’un coin à l’autre sur le plan, ou écris les dimensions puis « Placer ».",1)+
+    (wh?'<div class="ckfix"><b>Pièce tracée : '+ckM(wh[0])+' × '+ckM(wh[1])+' m</b>'+ckNum("ckFixW","Largeur ↔ (m)",ckM(wh[0]),null,"sm")+ckNum("ckFixH","Longueur ↕ (m)",ckM(wh[1]),null,"sm")+'<button type="button" class="btn sm pri" id="ckFixRGo">Corriger</button><button type="button" class="linkbtn" id="ckFixRNo">C’est bon</button></div>':'')+'<div class="ckwork"><div class="ckcol"><div class="ckins">'+ckNum("ckRw","Largeur (m)",null,"ex. 4")+ckNum("ckRl","Longueur (m)",null,"ex. 3,5")+'</div>'+ckKp()+'</div><div class="ckcol grow"><label class="cklen grow"><span>Nom de la pièce</span><input id="ckRn" placeholder="ex. Salon" list="ckRoomList" autocomplete="off"></label><div class="ckrow ckchips">'+["Salon","Chambre","Cuisine","SDB","Hall","Terrasse"].map(r=>'<button type="button" class="ckchip" data-rn="'+r+'">'+r+'</button>').join("")+'</div><button type="button" class="btn sm pri" id="ckRgo">Placer</button></div></div>';}
   else if(T==="door"||T==="win"){const cur=T==="door"?CK.doorW:CK.winW,opts=T==="door"?[.7,.8,.9,1,1.2,1.4,1.6]:[.6,.8,1,1.2,1.5,2,2.4];
     h=ckHead(T==="door"?"PORTE":"FENÊTRE","Choisis la largeur, puis touche un mur pour la placer.")+'<div class="ckrow ckchips">'+ckChips(opts,cur,"w")+'</div><div class="ckrow">'+ckNum("ckOw","Autre largeur (m)",null,"ex. 0,85","sm")+'</div>'}
   else if(T==="stair")h=ckHead("ESCALIER","Touche le plan pour le placer, puis règle sa taille et son sens.");
@@ -2183,6 +2190,7 @@ function ckPanel(){const P=$("#ckPanel");if(!P)return;let h="";const T=CK.tool;
     if(!s)h=ckHead("SÉLECTION","Touche un élément pour le modifier. Glisse pour te déplacer, pince ou molette pour zoomer.");
     else if(s.t==="wall"||s.t==="line"){const sg=CK.sel.seg!=null?ckSegs(s)[CK.sel.seg]:null,L=sg?Math.hypot(sg[1][0]-sg[0][0],sg[1][1]-sg[0][1]):0;
       h=ckHead(s.t==="wall"?"MUR":"LIGNE",sg?"Segment de "+ckM(L)+" m : écris la nouvelle longueur, la suite du tracé suit.":CK.sel.v!=null?"Glisse le point pour le déplacer.":"Touche un segment pour changer sa longueur.",!!sg)+
+        (ckIsRect(s)?(()=>{const wh=ckRectWH(s);return '<div class="ckfix"><b>Pièce '+ckM(wh[0])+' × '+ckM(wh[1])+' m = '+ckM(wh[0]*wh[1]).replace(/,00$/,"")+' m²</b>'+ckNum("ckRoomW","Largeur ↔ (m)",ckM(wh[0]),null,"sm")+ckNum("ckRoomH","Longueur ↕ (m)",ckM(wh[1]),null,"sm")+'<button type="button" class="btn sm pri" id="ckRoomGo">Appliquer</button></div>'})():'')+
         (sg?'<div class="ckwork"><div class="ckcol"><div class="ckins">'+ckNum("ckSegL","Longueur (m)",ckM(L))+'</div>'+ckKp()+'</div><div class="ckcol"><button type="button" class="btn sm pri" id="ckSegGo">Appliquer</button></div></div>':'')+
         '<div class="ckrow">'+(s.t==="wall"?'<label class="cksel"><span>Épaisseur</span><select id="ckSelTh">'+CK_TH.map(v=>'<option value="'+v+'"'+(Math.abs(v-(s.th||.2))<1e-6?" selected":"")+'>'+ckM(v)+' m</option>').join("")+'</select></label>':'')+
         (s.pts.length>2?'<button type="button" class="btn sm" id="ckTogClose">'+(s.closed?"Ouvrir":"Fermer la pièce")+'</button>':'')+(s.closed?'':'<button type="button" class="btn sm" id="ckContinue">Continuer le tracé</button>')+'<button type="button" class="btn sm bad" id="ckDel">Supprimer</button></div>'}
@@ -2196,6 +2204,9 @@ function ckWirePanel(){const on=(id,f)=>{const e=document.getElementById(id);if(
   const ins=$$("#ckPanel .ckn");if(ins.length){if(!ins.some(x=>x.id===CK.kf))CK.kf=ins[0].id;ins.forEach(x=>{x.classList.toggle("act",x.id===CK.kf);x.addEventListener("focus",()=>{if(!CK_COARSE)try{x.select()}catch(e){}CK.kf=x.id;ins.forEach(y=>y.classList.toggle("act",y===x))})})}
   $$("#ckPanel .ckkp button").forEach(b=>{b.addEventListener("pointerdown",e=>e.preventDefault());b.onclick=()=>{const t=document.getElementById(CK.kf)||ins[0];if(!t)return;const k=b.dataset.k;if(t.dataset.fresh==="1"){t.dataset.fresh="";if(k!=="⌫")t.value=""}
     if(k==="⌫")t.value=t.value.slice(0,-1);else if(k===","){if(!/[.,]/.test(t.value))t.value+=(t.value?"":"0")+","}else t.value+=k;t.dispatchEvent(new Event("input",{bubbles:true}))}});
+  on("ckFixGo",ckFixApply);on("ckFixNo",()=>{CK.fix=false;CK.kf="ckLen";ckPanel()});
+  const fl=$("#ckFixL");if(fl)fl.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();e.stopPropagation();ckFixApply()}});
+  on("ckFixRGo",()=>{const it=CK.fixRect&&ckFind(CK.fixRect);if(it)ckRoomApply(it,"ckFixW","ckFixH")});on("ckFixRNo",()=>{CK.fixRect=null;ckPanel()});
   on("ckKpT",()=>{CK.kp=!CK.kp;try{LS.set("vt_ck_kp",CK.kp)}catch(e){}const keep=ins.map(x=>[x.id,x.value]);ckPanel();keep.forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.value=v})});
   $$("#ckPanel [data-rn]").forEach(b=>b.onclick=()=>{$("#ckRn").value=b.dataset.rn});
   $$("#ckPanel .ckdir[data-a]").forEach(b=>b.onclick=()=>ckByLength(+b.dataset.a));
@@ -2210,6 +2221,7 @@ function ckWirePanel(){const on=(id,f)=>{const e=document.getElementById(id);if(
   const ow=$("#ckOw");if(ow)ow.oninput=()=>{const v=numIn(ow.value);if(v>=.3&&v<=6){if(CK.tool==="door")CK.doorW=v;else CK.winW=v;$$("#ckPanel [data-w]").forEach(b=>b.classList.toggle("on",Math.abs(+b.dataset.w-v)<1e-6))}};
   const tx=$("#ckTxt");if(tx)tx.oninput=()=>{CK.txt=tx.value};$$("#ckPanel [data-room]").forEach(b=>b.onclick=()=>{CK.txt=b.dataset.room;ckPanel()});
   const s=CK.sel&&ckFind(CK.sel.id);if(!s)return;
+  on("ckRoomGo",()=>ckRoomApply(s,"ckRoomW","ckRoomH"));
   on("ckDel",()=>{ckPush();CK.plan.items=ckItems().filter(i=>i.id!==s.id&&i.wid!==s.id);CK.sel=null;ckPanel();ckDraw()});
   on("ckSegGo",()=>{const L=numIn($("#ckSegL").value);if(!(L>0))return;ckPush();const i=CK.sel.seg,p=s.pts,a=p[i],j=(i+1)%p.length,b=p[j],L0=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L0<1e-6)return;
     const dx=(b[0]-a[0])/L0*(L-L0),dy=(b[1]-a[1])/L0*(L-L0);if(j===0){/* segment de fermeture : on déplace le premier point */p[0]=[ckR(p[0][0]+dx),ckR(p[0][1]+dy)]}else for(let k=j;k<p.length;k++)p[k]=[ckR(p[k][0]+dx),ckR(p[k][1]+dy)];ckPanel();ckDraw()});
@@ -2223,9 +2235,19 @@ function ckWirePanel(){const on=(id,f)=>{const e=document.getElementById(id);if(
   on("ckSrot",()=>{ckPush();s.r=((s.r||0)+90)%360;ckDraw()});
   const te=$("#ckTe");if(te)te.onchange=()=>{ckPush();s.s=te.value;ckDraw()};on("ckTs",()=>{ckPush();s.h=Math.max(.15,(s.h||.35)-.05);ckDraw()});on("ckTb",()=>{ckPush();s.h=Math.min(1.5,(s.h||.35)+.05);ckDraw()});
   on("ckDo",()=>{ckPush();s.o=((s.o||0)+.3)>1.8?-.9:(s.o||0)+.3;ckDraw()})}
-function ckRect(a,b,name){const x0=Math.min(a[0],b[0]),x1=Math.max(a[0],b[0]),y0=Math.min(a[1],b[1]),y1=Math.max(a[1],b[1]);if(x1-x0<.1||y1-y0<.1)return;ckPush();
-  CK.plan.items.push({t:"wall",id:ckUid(),pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>p.map(ckR)),closed:true,th:CK.th});
-  if(name)CK.plan.items.push({t:"text",id:ckUid(),x:ckR((x0+x1)/2),y:ckR((y0+y1)/2),s:name,h:.3});ckPanel();ckDraw()}
+function ckRect(a,b,name){const x0=Math.min(a[0],b[0]),x1=Math.max(a[0],b[0]),y0=Math.min(a[1],b[1]),y1=Math.max(a[1],b[1]);if(x1-x0<.1||y1-y0<.1)return null;ckPush();
+  const id=ckUid();CK.plan.items.push({t:"wall",id,pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>p.map(ckR)),closed:true,th:CK.th});
+  if(name)CK.plan.items.push({t:"text",id:ckUid(),x:ckR((x0+x1)/2),y:ckR((y0+y1)/2),s:name,h:.3});CK.fixRect=null;ckPanel();ckDraw();return id}
+function ckIsRect(it){return it&&it.t==="wall"&&it.closed&&it.pts.length===4&&ckSegs(it).every(([a,b])=>Math.abs(a[0]-b[0])<1e-3||Math.abs(a[1]-b[1])<1e-3)}
+function ckRectWH(it){const xs=it.pts.map(p=>p[0]),ys=it.pts.map(p=>p[1]);return [Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys)]}
+function ckResizeRect(it,W,H){const xs=it.pts.map(p=>p[0]),ys=it.pts.map(p=>p[1]),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),cx=(x0+x1)/2,cy=(y0+y1)/2;
+  it.pts=it.pts.map(([x,y])=>[ckR(Math.abs(x-x1)<1e-6?x0+W:x0),ckR(Math.abs(y-y1)<1e-6?y0+H:y0)]);
+  ckItems().forEach(t=>{if(t.t==="text"&&Math.abs(t.x-cx)<.05&&Math.abs(t.y-cy)<.05){t.x=ckR(x0+W/2);t.y=ckR(y0+H/2)}})}
+function ckFixApply(){const L=numIn(($("#ckFixL")||{}).value);if(!(L>0)){toast("Écris la longueur exacte en mètres.");return}const p=CK.cur&&CK.cur.pts;if(!p||p.length<2)return;
+  const a=p[p.length-2],b=p[p.length-1],L0=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L0<1e-6)return;ckPush();p[p.length-1]=[ckR(a[0]+(b[0]-a[0])/L0*L),ckR(a[1]+(b[1]-a[1])/L0*L)];
+  CK.fix=false;CK.kf="ckLen";toast("Mur corrigé : "+ckM(L)+" m");ckPanel();ckDraw();ckFitIfOut()}
+function ckRoomApply(it,wId,hId){const W=numIn(($("#"+wId)||{}).value),H=numIn(($("#"+hId)||{}).value);if(!(W>0&&H>0)){toast("Écris la largeur et la longueur.");return}
+  ckPush();ckResizeRect(it,W,H);CK.fixRect=null;toast("Pièce : "+ckM(W)+" × "+ckM(H)+" m = "+ckM(W*H).replace(/,00$/,"")+" m²");ckPanel();ckDraw();ckFitIfOut()}
 function ckPlaceOpening(w){let best=null;ckItems().forEach(it=>{if(it.t!=="wall")return;ckSegs(it).forEach((sg,i)=>{const r=ckDistSeg(w,sg[0],sg[1]);if(r.d<Math.max(16/CK.s,(it.th||.2))&&(!best||r.d<best.d))best={d:r.d,it,i,t:r.t,L:Math.hypot(sg[1][0]-sg[0][0],sg[1][1]-sg[0][1])}})});
   if(!best){toast("Touche un mur pour placer "+(CK.tool==="door"?"la porte.":"la fenêtre."));return}const wd=CK.tool==="door"?CK.doorW:CK.winW;if(best.L<wd+.05){toast("Ce mur est trop court pour cette largeur.");return}
   ckPush();const o={t:CK.tool,id:ckUid(),wid:best.it.id,si:best.i,d:ckR(Math.max(wd/2,Math.min(best.L-wd/2,best.t*best.L))),w:wd};if(CK.tool==="door"){o.flip=0;o.side=0}CK.plan.items.push(o);CK.tool="select";CK.sel={id:o.id};
@@ -2257,8 +2279,8 @@ function ckUp(e){if(!CK.ptrs.has(e.pointerId)&&!CK.pinch)return;CK.ptrs.delete(e
   if(CK.ro)return;
   if(CK.tool==="wall"||CK.tool==="line"){const last=CK.cur?CK.cur.pts[CK.cur.pts.length-1]:null;const p=ckSnap(w,last).p;
     if(CK.cur&&CK.cur.pts.length>=3){const s0=CK.cur.pts[0];if(Math.hypot(p[0]-s0[0],p[1]-s0[1])<14/CK.s){ckPush();CK.cur.closed=true;CK.cur=null;toast("Pièce fermée");ckPanel();ckDraw();return}}
-    ckAddPoint(p);return}
-  if(CK.tool==="rect"){if(CK.ptA&&(D.moved||!D.started)){ckRect(CK.ptA,ckSnap(w).p,"");CK.ptA=null;CK.hov=null;ckPanel();ckDraw()}return}
+    CK.fixNext=true;ckAddPoint(p);return}
+  if(CK.tool==="rect"){if(CK.ptA&&(D.moved||!D.started)){const id=ckRect(CK.ptA,ckSnap(w).p,"");CK.ptA=null;CK.hov=null;CK.fixRect=id;if(id&&CK_COARSE)CK.kf="ckFixW";ckPanel();ckDraw()}return}
   if(CK.tool==="dim"){if(CK.ptA&&!D.started){const b=ckSnap(w,CK.ptA).p;if(Math.hypot(b[0]-CK.ptA[0],b[1]-CK.ptA[1])>.05){ckPush();CK.plan.items.push({t:"dim",id:ckUid(),a:CK.ptA,b,o:.5})}CK.ptA=null;CK.hov=null;ckPanel();ckDraw()}
     else if(CK.ptA&&D.started&&D.moved){const b=ckSnap(w,CK.ptA).p;ckPush();CK.plan.items.push({t:"dim",id:ckUid(),a:CK.ptA,b,o:.5});CK.ptA=null;CK.hov=null;ckPanel();ckDraw()}return}
   if(CK.tool==="door"||CK.tool==="win"){ckPlaceOpening(w);return}
