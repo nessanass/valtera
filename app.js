@@ -2185,7 +2185,7 @@ function ckPanel(){const P=$("#ckPanel");if(!P)return;let h="";const T=CK.tool;
   else if(T==="stair")h=ckHead("ESCALIER","Touche le plan pour le placer, puis règle sa taille et son sens.");
   else if(T==="dim")h=ckHead("COTE",CK.ptA?"Touche le second point.":"Touche le premier point : il s’aimante sur les angles des murs.");
   else if(T==="text")h=ckHead("TEXTE","Choisis ou écris le texte, puis touche le plan à l’endroit voulu.")+'<div class="ckrow"><label class="cklen grow"><span>Texte</span><input id="ckTxt" value="'+ckEsc(CK.txt)+'" autocomplete="off"></label></div><div class="ckrow ckchips">'+CK_ROOMS.map(r=>'<button type="button" class="ckchip'+(r===CK.txt?" on":"")+'" data-room="'+ckEsc(r)+'">'+ckEsc(r)+'</button>').join("")+'</div>';
-  else if(T==="erase")h=ckHead("GOMME","Touche un élément pour l’effacer (annulable).");
+  else if(T==="erase")h=ckHead("GOMME","Touche un trait pour l’effacer : un seul segment à la fois (annulable). Pour supprimer une pièce entière : Sélection puis Supprimer.");
   else{const s=CK.sel&&ckFind(CK.sel.id);
     if(!s)h=ckHead("SÉLECTION","Touche un élément pour le modifier. Glisse pour te déplacer, pince ou molette pour zoomer.");
     else if(s.t==="wall"||s.t==="line"){const sg=CK.sel.seg!=null?ckSegs(s)[CK.sel.seg]:null,L=sg?Math.hypot(sg[1][0]-sg[0][0],sg[1][1]-sg[0][1]):0;
@@ -2235,6 +2235,13 @@ function ckWirePanel(){const on=(id,f)=>{const e=document.getElementById(id);if(
   on("ckSrot",()=>{ckPush();s.r=((s.r||0)+90)%360;ckDraw()});
   const te=$("#ckTe");if(te)te.onchange=()=>{ckPush();s.s=te.value;ckDraw()};on("ckTs",()=>{ckPush();s.h=Math.max(.15,(s.h||.35)-.05);ckDraw()});on("ckTb",()=>{ckPush();s.h=Math.min(1.5,(s.h||.35)+.05);ckDraw()});
   on("ckDo",()=>{ckPush();s.o=((s.o||0)+.3)>1.8?-.9:(s.o||0)+.3;ckDraw()})}
+function ckEraseSeg(it,si){const p=it.pts,n=p.length,items=ckItems(),idx=items.indexOf(it);if(idx<0)return;let parts;
+  if(it.closed&&n>2){const pts=[],map={};for(let k=1;k<=n;k++)pts.push(p[(si+k)%n]);for(let j=0;j<n-1;j++)map[(si+1+j)%n]=j;parts=[{pts,map}]}
+  else{const ma={},mb={};for(let j=0;j<si;j++)ma[j]=j;for(let j=si+1;j<n-1;j++)mb[j]=j-si-1;parts=[{pts:p.slice(0,si+1),map:ma},{pts:p.slice(si+1),map:mb}]}
+  parts=parts.filter(q=>q.pts.length>=2);const nw=parts.map((q,k)=>Object.assign({},it,{id:k===0?it.id:ckUid(),pts:q.pts,closed:false}));
+  items.splice(idx,1,...nw);const drop=new Set();
+  items.forEach(o=>{if((o.t==="door"||o.t==="win")&&o.wid===it.id){if(o.si===si){drop.add(o.id);return}const k=parts.findIndex(q=>q.map[o.si]!=null);if(k<0){drop.add(o.id);return}o.wid=nw[k].id;o.si=parts[k].map[o.si]}});
+  CK.plan.items=items.filter(o=>!drop.has(o.id))}
 function ckRect(a,b,name){const x0=Math.min(a[0],b[0]),x1=Math.max(a[0],b[0]),y0=Math.min(a[1],b[1]),y1=Math.max(a[1],b[1]);if(x1-x0<.1||y1-y0<.1)return null;ckPush();
   const id=ckUid();CK.plan.items.push({t:"wall",id,pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>p.map(ckR)),closed:true,th:CK.th});
   if(name)CK.plan.items.push({t:"text",id:ckUid(),x:ckR((x0+x1)/2),y:ckR((y0+y1)/2),s:name,h:.3});CK.fixRect=null;ckPanel();ckDraw();return id}
@@ -2286,7 +2293,10 @@ function ckUp(e){if(!CK.ptrs.has(e.pointerId)&&!CK.pinch)return;CK.ptrs.delete(e
   if(CK.tool==="door"||CK.tool==="win"){ckPlaceOpening(w);return}
   if(CK.tool==="stair"){ckPush();const p=ckSnap(w).p;const o={t:"stair",id:ckUid(),x:p[0],y:p[1],w:1,l:3,n:12,r:0};CK.plan.items.push(o);CK.tool="select";CK.sel={id:o.id};$$("#ckTools button").forEach(b=>b.classList.toggle("on",b.dataset.tool==="select"));ckPanel();ckDraw();return}
   if(CK.tool==="text"){const s=(($("#ckTxt")||{}).value||CK.txt||"").trim();if(!s){toast("Écris le texte d’abord.");return}ckPush();const p=ckSnap(w).p;CK.plan.items.push({t:"text",id:ckUid(),x:p[0],y:p[1],s,h:.3});ckDraw();return}
-  if(CK.tool==="erase"){const h=ckHit(w);if(!h)return;ckPush();CK.plan.items=ckItems().filter(i=>i.id!==h.id&&i.wid!==h.id);if(CK.cur&&CK.cur.id===h.id)CK.cur=null;ckDraw()}}
+  if(CK.tool==="erase"){const h=ckHit(w);if(!h)return;const it=ckFind(h.id);
+    if(it&&(it.t==="wall"||it.t==="line")&&ckSegs(it).length>1){let si=h.seg;if(si==null){let bd=1e9;ckSegs(it).forEach((sg,i)=>{const d=ckDistSeg(w,sg[0],sg[1]).d;if(d<bd){bd=d;si=i}})}
+      ckPush();ckEraseSeg(it,si);if(CK.cur&&CK.cur.id===it.id)CK.cur=null;CK.sel=null;ckPanel();ckDraw();return}
+    ckPush();CK.plan.items=ckItems().filter(i=>i.id!==h.id&&i.wid!==h.id);if(CK.cur&&CK.cur.id===h.id)CK.cur=null;ckDraw()}}
 /* ---------- ouverture, enregistrement ---------- */
 function ckOpen(idx,ro){try{const k=LS.get("vt_ck_kp",null);CK.kp=k==null?CK_COARSE:!!k}catch(e){CK.kp=CK_COARSE}const base=idx>=0?visPlans[idx]:{id:ckUid(),name:visPlans.length?"Étage "+visPlans.length:"RDC",items:[]};
   CK.idx=idx;CK.ro=!!ro;CK.key=(visEditing?.id||"new")+"/"+base.id;CK.plan=JSON.parse(JSON.stringify(base));CK.hist=[];CK.fut=[];CK.cur=null;CK.sel=null;CK.ptA=null;CK.hov=null;CK.dirty=false;
